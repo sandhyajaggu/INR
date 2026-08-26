@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-inr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-inr_mla_crm}
+    ports:
+      # Host-side port only (for connecting a local psql/GUI client) — internal
+      # container-to-container traffic below uses db:5432 regardless. Mapped to
+      # 5544 on the host since 5432/5433 are commonly already taken by a
+      # native Postgres install.
+      - "5544:5432"
+    volumes:
+      - inr_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-inr_user} -d ${POSTGRES_DB:-inr_mla_crm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-inr_user}:${POSTGRES_PASSWORD:-inr_password}@db:5432/${POSTGRES_DB:-inr_mla_crm}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m scripts.seed_geography &&
+             python -m scripts.seed_schemes &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  inr_pg_data:
