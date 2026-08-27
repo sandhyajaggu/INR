@@ -305,17 +305,35 @@ separate managed Postgres instead of the bundled container.
 
 ### Option B — Render + Neon
 
+`render.yaml` in the repo root is a ready-to-use Blueprint for this.
+
 1. Create a Neon Postgres project, copy its connection string into
    `DATABASE_URL` (format:
    `postgresql+asyncpg://user:pass@ep-xxxx.neon.tech/dbname?ssl=require`).
-2. On Render: New → Web Service → point at this repo, Docker runtime (uses
-   the included `Dockerfile` directly, no build config needed), set the same
-   env vars as `.env.example`.
-3. Add a Render "pre-deploy command" (or a one-off job) running
-   `alembic upgrade head && python -m scripts.seed_geography` before the web
-   service starts.
-4. Render issues TLS automatically; point the frontend at the Render URL (or
+2. On Render: New → Blueprint → point at this repo → it reads `render.yaml`
+   and creates the web service (Docker runtime, the included `Dockerfile`,
+   no build config needed). Alternatively, New → Web Service manually with
+   the same settings.
+3. Fill in the env vars marked `sync: false` in the Render dashboard
+   (`SECRET_KEY`, `CAPTCHA_SECRET_KEY`, `AADHAAR_ENCRYPTION_KEY`,
+   `DATABASE_URL`) — generate the first three with the commands in
+   [Local setup](#local-setup) step 3.
+4. The container's `CMD` (`Dockerfile`) already runs
+   `alembic upgrade head && python -m scripts.seed_geography &&
+   python -m scripts.seed_schemes` before starting Uvicorn on every deploy —
+   all three are idempotent, so no separate pre-deploy command is needed.
+   Uvicorn binds to Render's `$PORT` automatically.
+5. Render issues TLS automatically; point the frontend at the Render URL (or
    a custom `api.mlainr.com` CNAME onto it).
+
+**Uploads caveat:** `LocalDiskStorage` (`app/core/storage.py`) writes to
+`/app/uploads` on the container's local disk, which Render wipes on every
+deploy/restart unless a persistent disk is attached. `render.yaml` attaches a
+1GB disk at `/app/uploads` for this reason — bump `sizeGB` if needed, or
+switch to an S3-compatible `FileStorage` implementation later if uploads
+volume outgrows a single disk (Render disks aren't shared across multiple
+instances, which also caps this service at one instance as long as uploads
+stay on local disk).
 
 ### Recommendation
 

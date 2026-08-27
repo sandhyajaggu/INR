@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: inr-mla-crm-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: INR MLA CRM
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        sync: false
+      - key: CAPTCHA_SECRET_KEY
+        sync: false
+      - key: AADHAAR_ENCRYPTION_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: CAPTCHA_TOKEN_EXPIRE_MINUTES
+        value: "5"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://mlainr.com,https://mla-inr.netlify.app
+      - key: STORAGE_BACKEND
+        value: local
+      - key: UPLOAD_DIR
+        value: uploads
+      - key: UPLOAD_BASE_URL
+        value: /uploads
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "25"
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 1
