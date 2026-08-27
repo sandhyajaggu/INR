@@ -7,7 +7,7 @@ pydantic>=2.9.0
 pydantic-settings>=2.6.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
-bcrypt>=4.0.1
+bcrypt>=4.0.1,<4.1  # passlib 1.7.4 (unmaintained) crashes on bcrypt>=4.1 — see AttributeError on `_bcrypt.__about__`
 python-multipart>=0.0.12
 cryptography>=43.0.0
 email-validator>=2.2.0
