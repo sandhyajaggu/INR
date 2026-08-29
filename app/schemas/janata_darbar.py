@@ -27,7 +27,11 @@ class JanataDarbarCreate(BaseModel):
 
 
 class JanataDarbarUpdate(JanataDarbarCreate):
-    pass
+    # visit_date is DB NOT NULL (DEFAULT CURRENT_DATE on insert only — SQLAlchemy's
+    # server_default never applies on UPDATE, so a None here would crash the UPDATE
+    # with a NotNullViolationError instead of falling back to a default). Required
+    # here so an update that omits it gets a clean 422 instead of a 500.
+    visit_date: date
 
 
 class JanataDarbarOut(ORMModel):
