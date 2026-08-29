@@ -1,15 +1,17 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
 from app.models.voters import Voter
+from app.schemas.bulk_import import BulkImportResult
 from app.schemas.common import PaginatedResponse
 from app.schemas.voters import GenderDistribution, MandalVoterSummary, VoterCreate, VoterOut, VoterUpdate
 from app.services.activity_service import log_activity
 from app.services.encryption_service import encrypt_aadhaar
+from app.services.excel_import_service import parse_excel_rows
 from app.services.geography_service import resolve_geography
-from app.services.voter_service import get_voter_or_404, search_voters, to_voter_out
+from app.services.voter_service import bulk_import_voters, get_voter_or_404, search_voters, to_voter_out
 
 router = APIRouter(prefix="/voters", tags=["Voters"])
 
@@ -104,6 +106,31 @@ async def create_voter(
     await db.commit()
     await db.refresh(voter)
     return to_voter_out(voter)
+
+
+@router.post(
+    "/bulk-upload",
+    response_model=BulkImportResult,
+    summary="Bulk-import voters from an Excel (.xlsx) sheet",
+    description=(
+        "All-or-nothing import: every row is validated first (required fields, "
+        "epic_no format, no duplicate epic_no within the file or against existing "
+        "voters, mandal_name/village_name/booth_number all resolvable). If any row "
+        "fails, nothing is written and the full list of row errors is returned instead."
+    ),
+)
+async def bulk_upload_voters(
+    file: UploadFile, db: DbSession, current_user: RequireStaff
+) -> BulkImportResult:
+    rows = await parse_excel_rows(
+        file, required_columns={"epic_no", "name", "mandal_name", "village_name"}
+    )
+    result = await bulk_import_voters(db, rows, actor_id=current_user.id)
+    if result.errors:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[e.model_dump() for e in result.errors]
+        )
+    return result
 
 
 @router.put("/{voter_id}", response_model=VoterOut, summary="Update a voter")

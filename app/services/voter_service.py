@@ -1,12 +1,17 @@
 from math import ceil
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.geography import Booth, Mandal, Village
 from app.models.voters import Voter
+from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.schemas.common import PaginatedResponse
-from app.schemas.voters import VoterOut
+from app.schemas.voters import VoterBulkRow, VoterOut
+from app.services.activity_service import log_activity
+from app.services.encryption_service import encrypt_aadhaar
 
 
 def to_voter_out(voter: Voter) -> VoterOut:
@@ -92,3 +97,128 @@ async def get_voter_or_404(db: AsyncSession, voter_id: int) -> Voter:
     if voter is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voter not found")
     return voter
+
+
+async def _load_geography_maps(
+    db: AsyncSession,
+) -> tuple[dict[str, int], dict[tuple[int, str], int], dict[tuple[int, str], int]]:
+    """Loads every mandal/village/booth into memory once for bulk-import lookups.
+
+    A bulk sheet can carry thousands of rows, each needing a mandal/village/
+    booth lookup — doing that via resolve_geography/resolve_booth_id (one
+    query per row) would mean up to 3 sequential round trips per row. These
+    tables are small (dozens to low hundreds of rows), so loading them all
+    once and resolving every row from an in-memory dict is far cheaper.
+    """
+    mandals = (await db.execute(select(Mandal.id, Mandal.name))).all()
+    mandal_map = {m.name.strip().lower(): m.id for m in mandals}
+
+    villages = (await db.execute(select(Village.id, Village.mandal_id, Village.name))).all()
+    village_map = {(v.mandal_id, v.name.strip().lower()): v.id for v in villages}
+
+    booths = (await db.execute(select(Booth.id, Booth.mandal_id, Booth.booth_number))).all()
+    booth_map = {(b.mandal_id, b.booth_number.strip()): b.id for b in booths}
+
+    return mandal_map, village_map, booth_map
+
+
+async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) -> BulkImportResult:
+    """All-or-nothing bulk import of voters from a parsed Excel sheet.
+
+    Every row is validated in full before anything is written: field format,
+    duplicate epic_no within the file, duplicate epic_no already in the
+    database, and resolvable mandal_name/village_name/booth_number. If any
+    row has any problem, nothing is inserted and the complete list of row
+    errors is returned so the whole sheet can be corrected in one pass.
+    """
+    errors: list[BulkImportRowError] = []
+    parsed_rows: list[tuple[int, VoterBulkRow]] = []
+
+    for raw in rows:
+        row_num = raw.get("_row_number")
+        epic_hint = str(raw.get("epic_no") or "").strip().upper() or None
+        try:
+            parsed_rows.append((row_num, VoterBulkRow.model_validate(raw)))
+        except ValidationError as exc:
+            reason = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
+            errors.append(BulkImportRowError(row=row_num, epic_no=epic_hint, reason=reason))
+
+    first_seen: dict[str, int] = {}
+    for row_num, parsed in parsed_rows:
+        if parsed.epic_no in first_seen:
+            errors.append(
+                BulkImportRowError(
+                    row=row_num,
+                    epic_no=parsed.epic_no,
+                    reason=f"Duplicate epic_no within file (first seen on row {first_seen[parsed.epic_no]})",
+                )
+            )
+        else:
+            first_seen[parsed.epic_no] = row_num
+
+    if first_seen:
+        existing_epics = (
+            (await db.execute(select(Voter.epic_no).where(Voter.epic_no.in_(first_seen.keys()))))
+            .scalars()
+            .all()
+        )
+        for epic in existing_epics:
+            errors.append(
+                BulkImportRowError(row=first_seen[epic], epic_no=epic, reason="epic_no already exists in the database")
+            )
+
+    mandal_map, village_map, booth_map = await _load_geography_maps(db)
+    resolved: list[tuple[VoterBulkRow, int, int, int | None]] = []
+    for row_num, parsed in parsed_rows:
+        mandal_id = mandal_map.get(parsed.mandal_name.strip().lower())
+        if mandal_id is None:
+            errors.append(
+                BulkImportRowError(row=row_num, epic_no=parsed.epic_no, reason=f"Unknown mandal_name '{parsed.mandal_name}'")
+            )
+            continue
+        village_id = village_map.get((mandal_id, parsed.village_name.strip().lower()))
+        if village_id is None:
+            errors.append(
+                BulkImportRowError(
+                    row=row_num,
+                    epic_no=parsed.epic_no,
+                    reason=f"Unknown village_name '{parsed.village_name}' in mandal '{parsed.mandal_name}'",
+                )
+            )
+            continue
+        booth_id = None
+        if parsed.booth_number:
+            booth_id = booth_map.get((mandal_id, parsed.booth_number.strip()))
+            if booth_id is None:
+                errors.append(
+                    BulkImportRowError(
+                        row=row_num,
+                        epic_no=parsed.epic_no,
+                        reason=f"Unknown booth_number '{parsed.booth_number}' in mandal '{parsed.mandal_name}'",
+                    )
+                )
+                continue
+        resolved.append((parsed, mandal_id, village_id, booth_id))
+
+    if errors:
+        return BulkImportResult(inserted=0, errors=errors)
+
+    voters = []
+    for parsed, mandal_id, village_id, booth_id in resolved:
+        data = parsed.model_dump(exclude={"mandal_name", "village_name", "booth_number"})
+        if data.get("aadhaar_number"):
+            data["aadhaar_number"] = encrypt_aadhaar(data["aadhaar_number"])
+        voters.append(Voter(**data, mandal_id=mandal_id, village_id=village_id, booth_id=booth_id))
+
+    db.add_all(voters)
+    await db.flush()
+    await log_activity(
+        db,
+        actor_id=actor_id,
+        action_type="voter_bulk_imported",
+        module="voters",
+        reference_id=None,
+        description=f"Bulk import: {len(voters)} voters added",
+    )
+    await db.commit()
+    return BulkImportResult(inserted=len(voters), errors=[])

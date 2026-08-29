@@ -88,3 +88,51 @@ class MandalVoterSummary(BaseModel):
 class GenderDistribution(BaseModel):
     gender: str | None
     total: int
+
+
+class VoterBulkRow(BaseModel):
+    """One row of a voters bulk-upload Excel sheet.
+
+    Same field rules as VoterCreate, except booth is given as the printed
+    booth_number (resolved to booth_id by the bulk-import service) instead
+    of the internal booth_id — spreadsheets carry human-readable booth
+    numbers, not internal IDs.
+    """
+
+    epic_no: str
+    name: str
+    relation_name: str | None = None
+    age: int | None = Field(default=None, ge=0, le=130)
+    gender: str | None = Field(default=None, pattern="^(Male|Female|Other)$")
+    mobile: str | None = None
+    aadhaar_number: str | None = None
+    house_no: str | None = None
+    mandal_name: str
+    village_name: str
+    booth_number: str | None = None
+    voted_last_election: bool | None = None
+    is_new_voter: bool = False
+
+    @field_validator("epic_no", mode="before")
+    @classmethod
+    def _validate_epic_no(cls, v: str) -> str:
+        validated = validate_epic_no(v)
+        if validated is None:
+            raise ValueError("epic_no is required")
+        return validated
+
+    @field_validator("mobile")
+    @classmethod
+    def _validate_mobile(cls, v: str | None) -> str | None:
+        if v and not re.match(MOBILE_PATTERN, v):
+            raise ValueError("mobile must be a valid 10-digit Indian mobile number")
+        return v
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def _validate_aadhaar(cls, v: str | None) -> str | None:
+        if v and not v.isdigit():
+            raise ValueError("aadhaar_number must be 12 digits")
+        if v and len(v) != 12:
+            raise ValueError("aadhaar_number must be exactly 12 digits")
+        return v

@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.geography import Mandal, Village
+from app.models.geography import Booth, Mandal, Village
 
 
 async def resolve_mandal_id(db: AsyncSession, mandal_name: str) -> int:
@@ -33,6 +33,27 @@ async def resolve_village_id(db: AsyncSession, village_name: str, mandal_id: int
             status.HTTP_404_NOT_FOUND, f"Unknown village '{village_name}' in that mandal"
         )
     return village_id
+
+
+async def resolve_booth_id(db: AsyncSession, booth_number: str | None, mandal_id: int) -> int | None:
+    """Resolves a booth_number to its internal booth_id, scoped to a mandal_id.
+
+    Same pattern as resolve_village_id: booth numbers are only unique within
+    a mandal (schema.sql's UNIQUE constraint is (mandal_id, booth_number)).
+    booth_id stays optional on voters, so a blank booth_number is a no-op —
+    it's only an error if a booth_number was given but not found.
+    """
+    if not booth_number:
+        return None
+    stmt = select(Booth.id).where(
+        Booth.booth_number == booth_number.strip(), Booth.mandal_id == mandal_id
+    )
+    booth_id = (await db.execute(stmt)).scalar_one_or_none()
+    if booth_id is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"Unknown booth_number '{booth_number}' in that mandal"
+        )
+    return booth_id
 
 
 async def resolve_geography(
