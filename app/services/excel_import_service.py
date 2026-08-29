@@ -17,15 +17,42 @@ def _normalize_header(value: object) -> str:
     return re.sub(r"\s+", "_", str(value).strip().lower())
 
 
+def _normalize_sheet_name(value: str) -> str:
+    return re.sub(r"[\s-]+", "_", value.strip().lower())
+
+
+def _rows_from_iter(rows_iter, headers: list[str]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for excel_row_num, values in enumerate(rows_iter, start=2):
+        if values is None or all(v is None for v in values):
+            continue
+        # Blank cells are omitted entirely (not passed through as None) so
+        # each field's own Pydantic default applies — a bare `None` would
+        # otherwise fail validation on non-Optional fields that have a
+        # default, e.g. status: str = "pending" or is_new_voter: bool = False.
+        row = {
+            headers[i]: values[i]
+            for i in range(len(headers))
+            if i < len(values) and values[i] is not None
+        }
+        row["_row_number"] = excel_row_num
+        rows.append(row)
+    return rows
+
+
+def _load_workbook_from_upload(contents: bytes):
+    try:
+        return load_workbook(filename=BytesIO(contents), read_only=True, data_only=True)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Could not read the Excel file") from exc
+
+
 async def parse_excel_rows(file: UploadFile, required_columns: set[str]) -> list[dict[str, object]]:
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only .xlsx files are supported")
 
     contents = await file.read()
-    try:
-        workbook = load_workbook(filename=BytesIO(contents), read_only=True, data_only=True)
-    except Exception as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Could not read the Excel file") from exc
+    workbook = _load_workbook_from_upload(contents)
 
     sheet = workbook.active
     rows_iter = sheet.iter_rows(values_only=True)
@@ -42,20 +69,37 @@ async def parse_excel_rows(file: UploadFile, required_columns: set[str]) -> list
             f"Missing required column(s): {', '.join(sorted(missing))}",
         )
 
-    rows: list[dict[str, object]] = []
-    for excel_row_num, values in enumerate(rows_iter, start=2):
-        if values is None or all(v is None for v in values):
-            continue
-        # Blank cells are omitted entirely (not passed through as None) so
-        # each field's own Pydantic default applies — a bare `None` would
-        # otherwise fail validation on non-Optional fields that have a
-        # default, e.g. status: str = "pending" or is_new_voter: bool = False.
-        row = {
-            headers[i]: values[i]
-            for i in range(len(headers))
-            if i < len(values) and values[i] is not None
-        }
-        row["_row_number"] = excel_row_num
-        rows.append(row)
+    return _rows_from_iter(rows_iter, headers)
 
-    return rows
+
+async def parse_excel_workbook(file: UploadFile) -> dict[str, list[dict[str, object]]]:
+    """Parses every non-empty sheet tab in a multi-tab .xlsx workbook.
+
+    Used by the combined all-schemes beneficiaries bulk-upload, where each
+    sheet tab represents one scheme. Returns {normalized_sheet_name: rows},
+    skipping sheets that are empty or header-only. Unlike parse_excel_rows,
+    no required-columns check happens here — each sheet's rows are validated
+    downstream against that scheme's own schema, since required fields differ
+    per scheme.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only .xlsx files are supported")
+
+    contents = await file.read()
+    workbook = _load_workbook_from_upload(contents)
+
+    sheets: dict[str, list[dict[str, object]]] = {}
+    for sheet in workbook.worksheets:
+        rows_iter = sheet.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            continue
+        headers = [_normalize_header(h) for h in header_row if h is not None]
+        if not headers:
+            continue
+        rows = _rows_from_iter(rows_iter, headers)
+        if rows:
+            sheets[_normalize_sheet_name(sheet.title)] = rows
+
+    return sheets
