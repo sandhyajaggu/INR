@@ -13,17 +13,19 @@ routed to one of three places automatically:
 from math import ceil
 from typing import Any, Type
 
-from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
 from app.models.schemes import Beneficiary, Scheme
+from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.schemas.common import PaginatedResponse
 from app.services.activity_service import log_activity
 from app.services.beneficiary_service import link_voter_by_epic
 from app.services.encryption_service import encrypt_aadhaar, mask_aadhaar
-from app.services.geography_service import resolve_geography
+from app.services.excel_import_service import parse_excel_rows
+from app.services.geography_service import load_geography_maps, resolve_geography
 
 CORE_BENEFICIARY_COLUMNS = {
     "relation_name", "age", "gender", "aadhaar_number", "mobile_number",
@@ -185,6 +187,99 @@ def build_beneficiary_scheme_router(
         await db.commit()
         await db.refresh(obj)
         return _to_out(obj, out_schema, name_field)
+
+    @router.post(
+        "/bulk-upload",
+        response_model=BulkImportResult,
+        summary=f"Bulk-import {resource_label} from an Excel (.xlsx) sheet",
+        description=(
+            "All-or-nothing import: every row is validated first against this scheme's "
+            "own field rules (same as the manual 'Add' form), with mandal_name/village_name "
+            "resolvable. If any row fails, nothing is written and the full list of row "
+            "errors is returned instead. Beneficiaries have no uniqueness constraint on "
+            "epic_no, so unlike voters there's no duplicate-row rejection."
+        ),
+    )
+    async def bulk_upload_items(
+        file: UploadFile, db: DbSession, current_user: RequireStaff
+    ) -> Any:
+        scheme_id = await _get_scheme_id(db, scheme_code)
+        required_columns = {
+            name for name, field in create_schema.model_fields.items() if field.is_required()
+        }
+        rows = await parse_excel_rows(file, required_columns=required_columns)
+
+        errors: list[BulkImportRowError] = []
+        parsed_rows: list[tuple[int, Any]] = []
+        for raw in rows:
+            row_num = raw.get("_row_number")
+            try:
+                parsed_rows.append((row_num, create_schema.model_validate(raw)))  # type: ignore[attr-defined]
+            except ValidationError as exc:
+                reason = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
+                epic_hint = str(raw.get("epic_no") or "").strip().upper() or None
+                errors.append(BulkImportRowError(row=row_num, epic_no=epic_hint, reason=reason))
+
+        mandal_map, village_map, _ = await load_geography_maps(db)
+        resolved: list[tuple[Any, int, int]] = []
+        for row_num, parsed in parsed_rows:
+            data = parsed.model_dump()
+            epic_hint = data.get("epic_no")
+            mandal_id = mandal_map.get(data["mandal_name"].strip().lower())
+            if mandal_id is None:
+                errors.append(BulkImportRowError(row=row_num, epic_no=epic_hint, reason=f"Unknown mandal_name '{data['mandal_name']}'"))
+                continue
+            village_id = village_map.get((mandal_id, data["village_name"].strip().lower()))
+            if village_id is None:
+                errors.append(
+                    BulkImportRowError(
+                        row=row_num,
+                        epic_no=epic_hint,
+                        reason=f"Unknown village_name '{data['village_name']}' in mandal '{data['mandal_name']}'",
+                    )
+                )
+                continue
+            resolved.append((parsed, mandal_id, village_id))
+
+        if errors:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[e.model_dump() for e in errors])
+
+        objs = []
+        for parsed, mandal_id, village_id in resolved:
+            data = parsed.model_dump()
+            data.pop("mandal_name")
+            data.pop("village_name")
+            core, details = _split_payload(data, name_field)
+            if core.get("epic_no"):
+                core["epic_no"] = core["epic_no"].upper()
+            if core.get("aadhaar_number"):
+                core["aadhaar_number"] = encrypt_aadhaar(core["aadhaar_number"])
+            voter_id = await link_voter_by_epic(db, core.get("epic_no"))
+            objs.append(
+                Beneficiary(
+                    scheme_id=scheme_id,
+                    mandal_id=mandal_id,
+                    village_id=village_id,
+                    voter_id=voter_id,
+                    scheme_details=details,
+                    created_by=current_user.id,
+                    **core,
+                )
+            )
+
+        db.add_all(objs)
+        await db.flush()
+        action_type = "cmrf_contribution" if scheme_code == "cmrf" else "beneficiary_added"
+        await log_activity(
+            db,
+            actor_id=current_user.id,
+            action_type=action_type,
+            module="beneficiaries",
+            reference_id=None,
+            description=f"Bulk import: {len(objs)} {_singularize(resource_label)} records added",
+        )
+        await db.commit()
+        return BulkImportResult(inserted=len(objs), errors=[])
 
     @router.put("/{item_id}", response_model=out_schema, summary=f"Update a {_singularize(resource_label)}")
     async def update_item(

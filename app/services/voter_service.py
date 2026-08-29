@@ -5,13 +5,13 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.geography import Booth, Mandal, Village
 from app.models.voters import Voter
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.schemas.common import PaginatedResponse
 from app.schemas.voters import VoterBulkRow, VoterOut
 from app.services.activity_service import log_activity
 from app.services.encryption_service import encrypt_aadhaar
+from app.services.geography_service import load_geography_maps
 
 
 def to_voter_out(voter: Voter) -> VoterOut:
@@ -99,29 +99,6 @@ async def get_voter_or_404(db: AsyncSession, voter_id: int) -> Voter:
     return voter
 
 
-async def _load_geography_maps(
-    db: AsyncSession,
-) -> tuple[dict[str, int], dict[tuple[int, str], int], dict[tuple[int, str], int]]:
-    """Loads every mandal/village/booth into memory once for bulk-import lookups.
-
-    A bulk sheet can carry thousands of rows, each needing a mandal/village/
-    booth lookup — doing that via resolve_geography/resolve_booth_id (one
-    query per row) would mean up to 3 sequential round trips per row. These
-    tables are small (dozens to low hundreds of rows), so loading them all
-    once and resolving every row from an in-memory dict is far cheaper.
-    """
-    mandals = (await db.execute(select(Mandal.id, Mandal.name))).all()
-    mandal_map = {m.name.strip().lower(): m.id for m in mandals}
-
-    villages = (await db.execute(select(Village.id, Village.mandal_id, Village.name))).all()
-    village_map = {(v.mandal_id, v.name.strip().lower()): v.id for v in villages}
-
-    booths = (await db.execute(select(Booth.id, Booth.mandal_id, Booth.booth_number))).all()
-    booth_map = {(b.mandal_id, b.booth_number.strip()): b.id for b in booths}
-
-    return mandal_map, village_map, booth_map
-
-
 async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) -> BulkImportResult:
     """All-or-nothing bulk import of voters from a parsed Excel sheet.
 
@@ -167,7 +144,7 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
                 BulkImportRowError(row=first_seen[epic], epic_no=epic, reason="epic_no already exists in the database")
             )
 
-    mandal_map, village_map, booth_map = await _load_geography_maps(db)
+    mandal_map, village_map, booth_map = await load_geography_maps(db)
     resolved: list[tuple[VoterBulkRow, int, int, int | None]] = []
     for row_num, parsed in parsed_rows:
         mandal_id = mandal_map.get(parsed.mandal_name.strip().lower())

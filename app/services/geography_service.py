@@ -56,6 +56,31 @@ async def resolve_booth_id(db: AsyncSession, booth_number: str | None, mandal_id
     return booth_id
 
 
+async def load_geography_maps(
+    db: AsyncSession,
+) -> tuple[dict[str, int], dict[tuple[int, str], int], dict[tuple[int, str], int]]:
+    """Loads every mandal/village/booth into memory once, for bulk-import lookups.
+
+    A bulk sheet can carry thousands of rows, each needing a mandal/village/
+    booth lookup — doing that via resolve_mandal_id/resolve_village_id/
+    resolve_booth_id (one or more queries per row) would mean several
+    sequential round trips per row. These tables are small (dozens to low
+    hundreds of rows), so loading them all once and resolving every row from
+    an in-memory dict is far cheaper. Used by the voters, development works,
+    and beneficiary-scheme bulk-upload endpoints.
+    """
+    mandals = (await db.execute(select(Mandal.id, Mandal.name))).all()
+    mandal_map = {m.name.strip().lower(): m.id for m in mandals}
+
+    villages = (await db.execute(select(Village.id, Village.mandal_id, Village.name))).all()
+    village_map = {(v.mandal_id, v.name.strip().lower()): v.id for v in villages}
+
+    booths = (await db.execute(select(Booth.id, Booth.mandal_id, Booth.booth_number))).all()
+    booth_map = {(b.mandal_id, b.booth_number.strip()): b.id for b in booths}
+
+    return mandal_map, village_map, booth_map
+
+
 async def resolve_geography(
     db: AsyncSession,
     *,

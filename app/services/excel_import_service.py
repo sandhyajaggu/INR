@@ -46,7 +46,15 @@ async def parse_excel_rows(file: UploadFile, required_columns: set[str]) -> list
     for excel_row_num, values in enumerate(rows_iter, start=2):
         if values is None or all(v is None for v in values):
             continue
-        row = {headers[i]: values[i] for i in range(len(headers)) if i < len(values)}
+        # Blank cells are omitted entirely (not passed through as None) so
+        # each field's own Pydantic default applies — a bare `None` would
+        # otherwise fail validation on non-Optional fields that have a
+        # default, e.g. status: str = "pending" or is_new_voter: bool = False.
+        row = {
+            headers[i]: values[i]
+            for i in range(len(headers))
+            if i < len(values) and values[i] is not None
+        }
         row["_row_number"] = excel_row_num
         rows.append(row)
 
