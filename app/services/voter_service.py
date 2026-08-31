@@ -134,11 +134,19 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
             first_seen[parsed.epic_no] = row_num
 
     if first_seen:
-        existing_epics = (
-            (await db.execute(select(Voter.epic_no).where(Voter.epic_no.in_(first_seen.keys()))))
-            .scalars()
-            .all()
-        )
+        # A large sheet can carry tens of thousands of epic_nos. SQLAlchemy's
+        # .in_() binds one query parameter per value, and PostgreSQL/asyncpg
+        # hard-caps a statement at 32767 bind parameters — a single query
+        # over the full key set can exceed that and crash the request.
+        # Batching keeps every query well under the limit.
+        epic_keys = list(first_seen.keys())
+        existing_epics: list[str] = []
+        batch_size = 5000
+        for i in range(0, len(epic_keys), batch_size):
+            batch = epic_keys[i : i + batch_size]
+            existing_epics.extend(
+                (await db.execute(select(Voter.epic_no).where(Voter.epic_no.in_(batch)))).scalars().all()
+            )
         for epic in existing_epics:
             errors.append(
                 BulkImportRowError(row=first_seen[epic], epic_no=epic, reason="epic_no already exists in the database")
