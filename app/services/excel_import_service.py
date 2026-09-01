@@ -12,6 +12,12 @@ from io import BytesIO
 from fastapi import HTTPException, UploadFile, status
 from openpyxl import load_workbook
 
+# A sheet larger than this holds everything (raw rows, parsed models, and any
+# row errors) in memory at once for the all-or-nothing validation pass, which
+# has OOM-killed the service on real electoral-roll-sized sheets (200k+ rows).
+# Failing fast here is cheap; ask the uploader to split the sheet instead.
+MAX_ROWS_PER_SHEET = 50_000
+
 
 def _normalize_header(value: object) -> str:
     return re.sub(r"\s+", "_", str(value).strip().lower())
@@ -69,7 +75,15 @@ async def parse_excel_rows(file: UploadFile, required_columns: set[str]) -> list
             f"Missing required column(s): {', '.join(sorted(missing))}",
         )
 
-    return _rows_from_iter(rows_iter, headers)
+    rows = _rows_from_iter(rows_iter, headers)
+    if len(rows) > MAX_ROWS_PER_SHEET:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Sheet has {len(rows)} rows, which exceeds the {MAX_ROWS_PER_SHEET:,}-row limit per "
+            "upload. Split it into smaller files (e.g. by mandal, or into batches) and upload each "
+            "one separately.",
+        )
+    return rows
 
 
 async def parse_excel_workbook(file: UploadFile) -> dict[str, list[dict[str, object]]]:
@@ -99,7 +113,15 @@ async def parse_excel_workbook(file: UploadFile) -> dict[str, list[dict[str, obj
         if not headers:
             continue
         rows = _rows_from_iter(rows_iter, headers)
-        if rows:
-            sheets[_normalize_sheet_name(sheet.title)] = rows
+        if not rows:
+            continue
+        if len(rows) > MAX_ROWS_PER_SHEET:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Sheet '{sheet.title}' has {len(rows)} rows, which exceeds the "
+                f"{MAX_ROWS_PER_SHEET:,}-row limit per upload. Split it into smaller files and "
+                "upload each one separately.",
+            )
+        sheets[_normalize_sheet_name(sheet.title)] = rows
 
     return sheets

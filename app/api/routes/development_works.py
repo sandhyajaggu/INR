@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from app.core.crud_router import build_crud_router
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff
 from app.models.development_works import DevelopmentWork
-from app.schemas.bulk_import import BulkImportResult
+from app.schemas.bulk_import import BulkImportResult, capped_error_detail
 from app.schemas.development_works import (
     DevelopmentStatusSummary,
     DevelopmentWorkCreate,
@@ -57,9 +57,7 @@ async def bulk_upload_development_works(
     rows = await parse_excel_rows(file, required_columns={"title", "mandal_name"})
     result = await bulk_import_development_works(db, rows, actor_id=current_user.id)
     if result.errors:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[e.model_dump() for e in result.errors]
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=capped_error_detail(result.errors))
     return result
 
 

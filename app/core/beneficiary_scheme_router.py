@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
 from app.models.schemes import Beneficiary, Scheme
-from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
+from app.schemas.bulk_import import BulkImportResult, BulkImportRowError, capped_error_detail
 from app.schemas.common import PaginatedResponse
 from app.services.activity_service import log_activity
 from app.services.beneficiary_service import link_voter_by_epic
@@ -242,7 +242,7 @@ def build_beneficiary_scheme_router(
             resolved.append((parsed, mandal_id, village_id))
 
         if errors:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[e.model_dump() for e in errors])
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=capped_error_detail(errors))
 
         objs = []
         for parsed, mandal_id, village_id in resolved:

@@ -15,7 +15,7 @@ from sqlalchemy import func, select, text
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
 from app.models.schemes import Beneficiary, Scheme
 from app.schemas.beneficiaries import BeneficiaryGeographyRow, BeneficiaryLookupResult, BeneficiaryOut
-from app.schemas.bulk_import import BulkImportResult
+from app.schemas.bulk_import import BulkImportResult, capped_error_detail
 from app.schemas.common import PaginatedResponse
 from app.services.activity_service import log_activity
 from app.services.beneficiary_service import (
@@ -128,9 +128,7 @@ async def bulk_upload_all_beneficiaries(
     sheets = await parse_excel_workbook(file)
     result = await bulk_import_all_beneficiaries(db, sheets, actor_id=current_user.id)
     if result.errors:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[e.model_dump() for e in result.errors]
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=capped_error_detail(result.errors))
     return result
 
 
