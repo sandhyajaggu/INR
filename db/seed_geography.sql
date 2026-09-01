@@ -10,13 +10,28 @@ INSERT INTO mandals (name) VALUES
     ('Ulavapadu'),
     ('Voletivaripalem');
 
+-- Prune villages renamed or dropped by this update (safe no-op on a fresh DB).
+-- If a village here still has booths attached, the FK RESTRICT on
+-- booths.village_id will block the delete until those booths are reassigned.
+DELETE FROM villages
+USING mandals
+WHERE villages.mandal_id = mandals.id
+  AND (
+    (mandals.name = 'Kandukur' AND villages.name IN ('G.Meka Padu', 'Kandukur', 'Mahadevapuram'))
+    OR (mandals.name = 'Lingasamudram' AND villages.name IN ('Malakondarayunipalem', 'Thimmareddypalem', 'Thurpu Rajupalem', 'Veeraraghavunikota'))
+    OR (mandals.name = 'Gudluru' AND villages.name IN ('Ammavaripalem', 'Basireddypalem', 'Chinalatrapi', 'Parakondapadu Agraharam', 'Venkampeta'))
+    OR (mandals.name = 'Ulavapadu' AND villages.name IN ('Atmakur', 'Bheemavaram', 'Chagallu', 'Chaki Cherla', 'K. Rajupalem', 'Karedu', 'Kollurupadu', 'Krishnapuram', 'Manneti Kota', 'Veerepalle'))
+    OR (mandals.name = 'Voletivaripalem' AND villages.name IN ('Ayyavaripalle', 'East Polineni Palem', 'Kakutur', 'Kondareddipalem', 'Naladalapur', 'Nawabpalem', 'Nekunam Puram K.Kandrika', 'Nekunampuram @ Pokur', 'Polineni Cheruvu', 'Ramachandrapuram', 'Sameerapalem', 'Singamnenipalle', 'Veeranna Palem', 'Z. Uppalapadu'))
+  );
+
 -- Kandukur
 INSERT INTO villages (mandal_id, name)
 SELECT id, v FROM mandals, UNNEST(ARRAY[
-    'Anandapuram','Anantha Sagaram','Donda Padu','G.Meka Padu','Jillelamudi',
-    'Kancharagunta','Kondamudusu Palem','Kandukur','Kovur','Machavaram',
-    'Madanagopalapuram','Mahadevapuram','Mopadu','Muppalakesaram','Ogur',
-    'Palukur','Palur','Pandalapadu','Vikkiralapeta'
+    'Anandapuram','Anantha Sagaram','Donda Padu','G. Meka Padu','Jillelamudi',
+    'Kancharagunta','Kondamudusu Palem','Kondikandukur','Kovur','Machavaram',
+    'Madanagopalapuram','Mahadevapuram (R)','Mopadu','Muppalakesaram','Ogur',
+    'Palukur','Palur','Pandalapadu','Vikkiralapeta','Balijapalem','Ganikunta',
+    'Guthikondavaripalem','Kammavaripalem','Narisettivaripalem'
 ]) AS v
 WHERE mandals.name = 'Kandukur';
 
@@ -24,41 +39,52 @@ WHERE mandals.name = 'Kandukur';
 INSERT INTO villages (mandal_id, name)
 SELECT id, v FROM mandals, UNNEST(ARRAY[
     'Anneboinapalle','Cheemalapenta','Chinapavani','Gangapalem',
-    'Jagamreddi Khandrika','Lingasamudram','Malakondarayunipalem',
+    'Jagamreddi Khandrika','Lingasamudram','Mala Konda Rayunipalem',
     'Mogilicherla','Mukteswaram','Mutyalapadu','Narasimhapuram','Pentrala',
-    'Racheruvurajupalem','Rallapadu','Thimmareddypalem','Thunugunta',
-    'Thurpu Rajupalem','Veeraraghavunikota','Vengalapuram','Viswanadhapuram'
+    'Racheruvurajupalem','Rallapadu','Thimmareddy Palem','Thunugunta',
+    'Thurpurajupalem','Veera Raghavuni Kota','Vengalapuram','Viswanadhapuram',
+    'Agnirekulapadu','Medarametlapalem','Muttvaripalem H/O mutyalapadu',
+    'Pedapavni H/O mutyalapadu','satyanarayanapuram H/O pedapavani',
+    'Vakamllavaripalem H/O lingasamudram','Yerrareddipalem'
 ]) AS v
 WHERE mandals.name = 'Lingasamudram';
 
 -- Gudluru
 INSERT INTO villages (mandal_id, name)
 SELECT id, v FROM mandals, UNNEST(ARRAY[
-    'Ammavaripalem','Basireddypalem','Chevuru','Chinalatrapi','Dappalampadu',
+    'Ammavari Palem','Basireddy Palem','Chevuru','Chinala Trapi','Dappalampadu',
     'Darakanipadu','Gudluru','Gundlapalem','Kothapeta','Mocherla',
-    'Nayudupalem','Parakondapadu Agraharam','Parakondapadu','Potluru',
-    'Puretipalle','Ravur','Swarnajipuram','Venkampeta'
+    'Nayudupalem','Parakonda Paduagraharam','Parakondapadu','Potluru',
+    'Puretipalle','Ravur','Swarnajipuram','Venkam Peta','Avulavaripalem',
+    'Chimidithapadu','Mogalluru','Pajerla','Puretipalli','RR colony',
+    'RC Agraharam','Rajupalem','Rallapadu H/O basireddypalem',
+    'Tettu H/O mocherla','Venkateswarapuram H/O dappalmpadu',
+    'yellurupadu H/O chevuru'
 ]) AS v
 WHERE mandals.name = 'Gudluru';
 
 -- Ulavapadu
 INSERT INTO villages (mandal_id, name)
 SELECT id, v FROM mandals, UNNEST(ARRAY[
-    'Atmakur','Baddepudi','Bheemavaram','Chagallu','Chaki Cherla',
-    'K. Rajupalem','Karedu','Kollurupadu','Krishnapuram','Manneti Kota',
-    'Ramayapatnam','Veerepalle'
+    'Alagyapalem H/O karedu','Atmakuru','Baddepudi','Beemavaram','Chagollu',
+    'Chakicherla','K rajuplalem','karedu','Korrupadu rajupalem',
+    'Krinshnapuram','Mannetikota','Peddapatupalem H/O chakicherla',
+    'Peddapalem H/O karedu','Ramayapatnam','Ulavapadu',
+    'Urrapalem H/O karedu','Verepalli'
 ]) AS v
 WHERE mandals.name = 'Ulavapadu';
 
 -- Voletivaripalem
 INSERT INTO villages (mandal_id, name)
 SELECT id, v FROM mandals, UNNEST(ARRAY[
-    'Ayyavaripalle','Chundi','East Polineni Palem','Kakutur','Kalavalla',
-    'Kondareddipalem','Kondasamudram','Naladalapur','Nawabpalem',
-    'Nekunam Puram K.Kandrika','Nekunampuram @ Pokur','Nukavaram',
-    'Polineni Cheruvu','Ramachandrapuram','Ramalingapuram','Sakhavaram',
-    'Sameerapalem','Singamnenipalle','Veeranna Palem','Voletivaripalem',
-    'Z. Uppalapadu'
+    'Ammapalem H/O chundi','Ankhabhupalapalem','Ayyivaripalem','Badevaripalem',
+    'Bangarakkaplem H/O chundi','Cherlopalem H/O kakuturu','Chundi',
+    'Garukapalem H/O polini cheruvu','kakarlapalem H/O chundi','Kakuturu',
+    'Kalavalla','Kondareddypalem','Kondasamudram','Kummarapalem H/O pokuru',
+    'Lingapalem','Malakonda','Ramalingapuram','Nalandapuru',
+    'Nekunampuram H/O pokuru','Nukavaram','Peddammapalem','Pokuru',
+    'Polini cheruvu','Polinenipalem','Sakhavaram','Samirapalem',
+    'Sigamanenipalli','Voletivaripalem','Z uppalapadu'
 ]) AS v
 WHERE mandals.name = 'Voletivaripalem';
 
