@@ -28,6 +28,30 @@ class Village(Base):
     mandal: Mapped["Mandal"] = relationship(back_populates="villages")
 
 
+class VillageAlias(Base):
+    """An alternate spelling of a village name accepted on bulk-import lookups.
+
+    Real electoral-roll sheets carry inconsistent, non-canonical spellings
+    of village names (ALL CAPS, missing spaces, transliteration variants).
+    Rather than renaming every uploaded sheet to match the canonical
+    villages.name, known variants are registered here so bulk-import
+    resolves either spelling to the same village_id — voters aren't split
+    across duplicate village records depending on which spelling their
+    sheet happened to use.
+    """
+
+    __tablename__ = "village_aliases"
+    __table_args__ = (UniqueConstraint("mandal_id", "alias"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    village_id: Mapped[int] = mapped_column(ForeignKey("villages.id", ondelete="CASCADE"), nullable=False)
+    mandal_id: Mapped[int] = mapped_column(ForeignKey("mandals.id", ondelete="CASCADE"), nullable=False)
+    alias: Mapped[str] = mapped_column(String(150), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+
+    village: Mapped["Village"] = relationship()
+
+
 class Booth(Base):
     __tablename__ = "booths"
     __table_args__ = (UniqueConstraint("mandal_id", "booth_number"),)

@@ -27,6 +27,19 @@ CREATE TABLE villages (
 );
 CREATE INDEX idx_villages_mandal ON villages(mandal_id);
 
+-- Alternate spellings of a village name accepted on bulk-import lookups, so
+-- real electoral-roll sheets (inconsistent casing/spelling) resolve to the
+-- same village_id instead of needing every sheet renamed to match exactly.
+CREATE TABLE village_aliases (
+    id          SERIAL PRIMARY KEY,
+    village_id  INT NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
+    mandal_id   INT NOT NULL REFERENCES mandals(id) ON DELETE CASCADE,
+    alias       VARCHAR(150) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (mandal_id, alias)
+);
+CREATE INDEX idx_village_aliases_village ON village_aliases(village_id);
+
 CREATE TABLE booths (
     id                    SERIAL PRIMARY KEY,
     booth_number          VARCHAR(20) NOT NULL,

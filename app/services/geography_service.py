@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.geography import Booth, Mandal, Village
+from app.models.geography import Booth, Mandal, Village, VillageAlias
 
 
 async def resolve_mandal_id(db: AsyncSession, mandal_name: str) -> int:
@@ -24,10 +24,14 @@ async def resolve_mandal_id(db: AsyncSession, mandal_name: str) -> int:
 
 
 async def resolve_village_id(db: AsyncSession, village_name: str, mandal_id: int) -> int:
-    stmt = select(Village.id).where(
-        func.lower(Village.name) == village_name.strip().lower(), Village.mandal_id == mandal_id
-    )
+    name = village_name.strip().lower()
+    stmt = select(Village.id).where(func.lower(Village.name) == name, Village.mandal_id == mandal_id)
     village_id = (await db.execute(stmt)).scalar_one_or_none()
+    if village_id is None:
+        alias_stmt = select(VillageAlias.village_id).where(
+            func.lower(VillageAlias.alias) == name, VillageAlias.mandal_id == mandal_id
+        )
+        village_id = (await db.execute(alias_stmt)).scalar_one_or_none()
     if village_id is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Unknown village '{village_name}' in that mandal"
@@ -74,6 +78,13 @@ async def load_geography_maps(
 
     villages = (await db.execute(select(Village.id, Village.mandal_id, Village.name))).all()
     village_map = {(v.mandal_id, v.name.strip().lower()): v.id for v in villages}
+
+    aliases = (await db.execute(select(VillageAlias.village_id, VillageAlias.mandal_id, VillageAlias.alias))).all()
+    for a in aliases:
+        # Canonical village names always win; an alias only fills in a key
+        # that isn't already a real village name (there shouldn't be a
+        # collision, but this keeps canonical resolution authoritative).
+        village_map.setdefault((a.mandal_id, a.alias.strip().lower()), a.village_id)
 
     booths = (await db.execute(select(Booth.id, Booth.mandal_id, Booth.booth_number))).all()
     booth_map = {(b.mandal_id, b.booth_number.strip()): b.id for b in booths}

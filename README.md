@@ -10,10 +10,11 @@ Source-of-truth documents this backend was built from live in `docs/` and
 - `docs/claude_code_prompt.md` — the build brief.
 - `docs/INR_MLA_CRM_Project_Documentation.docx` — full functional spec (every
   page, every table's columns, every Add/Edit form's fields).
-- `db/schema.sql` — the 18-table + 5-view PostgreSQL schema (source of truth
+- `db/schema.sql` — the 22-table + 5-view PostgreSQL schema (source of truth
   for the data model; SQLAlchemy models in `app/models/` mirror it exactly).
 - `db/seed_geography.sql` — original SQL seed; `scripts/seed_geography.py` is
-  the re-runnable Python equivalent used in practice.
+  the re-runnable Python equivalent used in practice. `db/seed_village_aliases.sql`
+  / `scripts/seed_village_aliases.py` seed known alternate village-name spellings.
 
 ## Project structure
 
@@ -26,8 +27,8 @@ app/
   api/routes/       one router per sidebar module
   main.py          app assembly: CORS, static /uploads mount, router wiring
 alembic/           migrations (env.py wired to app.core.config + all models)
-scripts/           seed_geography.py, seed_schemes.py — re-runnable seeds
-db/                original schema.sql / seed_geography.sql for reference
+scripts/           seed_geography.py, seed_village_aliases.py, seed_schemes.py — re-runnable seeds
+db/                original schema.sql / seed_geography.sql / seed_village_aliases.sql for reference
 docs/              original spec documents for reference
 uploads/           local file storage root (gitignored; swap for S3 later via app/core/storage.py)
 ```
@@ -112,6 +113,7 @@ create/update payloads.
    ```bash
    python -m alembic upgrade head
    python -m scripts.seed_geography
+   python -m scripts.seed_village_aliases
    python -m scripts.seed_schemes
    ```
 5. **Create your first super_admin** (there's no seed for staff accounts —
@@ -193,11 +195,17 @@ migrations.
 
 ```bash
 python -m scripts.seed_geography
+python -m scripts.seed_village_aliases
 ```
 
-Idempotent (`ON CONFLICT DO NOTHING`) — safe to re-run. Seeds the 5 mandals
-and every village in the constituency, matching `db/seed_geography.sql`
-exactly.
+Both idempotent (`ON CONFLICT DO NOTHING`) — safe to re-run.
+`seed_geography` seeds the 5 mandals and every village in the constituency,
+matching `db/seed_geography.sql` exactly. `seed_village_aliases` (must run
+after) seeds known alternate spellings of those village names — real
+electoral-roll sheets use inconsistent casing/spelling, and an alias lets
+bulk-import resolve either spelling to the same village_id instead of every
+sheet needing to be renamed to match `villages.name` exactly. See
+`scripts/seed_village_aliases.py` to add a new alias.
 
 ## Environment variables
 
@@ -318,11 +326,12 @@ separate managed Postgres instead of the bundled container.
    (`SECRET_KEY`, `CAPTCHA_SECRET_KEY`, `AADHAAR_ENCRYPTION_KEY`,
    `DATABASE_URL`) — generate the first three with the commands in
    [Local setup](#local-setup) step 3.
-4. The container's `CMD` (`Dockerfile`) already runs
-   `alembic upgrade head && python -m scripts.seed_geography &&
-   python -m scripts.seed_schemes` before starting Uvicorn on every deploy —
-   all three are idempotent, so no separate pre-deploy command is needed.
-   Uvicorn binds to Render's `$PORT` automatically.
+4. `render.yaml`'s `preDeployCommand` already runs `alembic upgrade head &&
+   python -m scripts.seed_geography && python -m scripts.seed_village_aliases
+   && python -m scripts.seed_schemes` once per deploy, on a separate instance,
+   before traffic cuts over — all four steps are idempotent. The container's
+   `CMD` (`Dockerfile`) then just starts Uvicorn, which binds to Render's
+   `$PORT` automatically.
 5. Render issues TLS automatically; point the frontend at the Render URL (or
    a custom `api.mlainr.com` CNAME onto it).
 

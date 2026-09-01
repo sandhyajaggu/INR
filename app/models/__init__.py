@@ -5,7 +5,7 @@ from app.models.activity_log import ActivityLog
 from app.models.contact import ContactMessage
 from app.models.development_works import DevelopmentWork
 from app.models.events import Event
-from app.models.geography import Booth, Mandal, Village
+from app.models.geography import Booth, Mandal, Village, VillageAlias
 from app.models.janata_darbar import JanataDarbarVisit
 from app.models.local_leaders import LocalLeader
 from app.models.multimedia import GalleryPhoto, Mp3Song, PressGalleryItem, Video
@@ -37,5 +37,6 @@ __all__ = [
     "Survey",
     "Video",
     "Village",
+    "VillageAlias",
     "Voter",
 ]

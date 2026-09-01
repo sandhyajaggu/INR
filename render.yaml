@@ -7,7 +7,7 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
-    preDeployCommand: alembic upgrade head && python -m scripts.seed_geography && python -m scripts.seed_schemes
+    preDeployCommand: alembic upgrade head && python -m scripts.seed_geography && python -m scripts.seed_village_aliases && python -m scripts.seed_schemes
     envVars:
       - key: APP_NAME
         value: INR MLA CRM
