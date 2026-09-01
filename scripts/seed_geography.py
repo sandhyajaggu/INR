@@ -24,7 +24,7 @@ MANDAL_VILLAGES: dict[str, list[str]] = {
         "Kancharagunta", "Kondamudusu Palem", "Kondikandukur", "Kovur", "Machavaram",
         "Madanagopalapuram", "Mahadevapuram (R)", "Mopadu", "Muppalakesaram", "Ogur",
         "Palukur", "Palur", "Pandalapadu", "Vikkiralapeta", "Balijapalem", "Ganikunta",
-        "Guthikondavaripalem", "Kammavaripalem", "Narisettivaripalem",
+        "Guthikondavaripalem", "Kammavaripalem", "Narisettivaripalem", "Kandukur Municipality",
     ],
     "Lingasamudram": [
         "Anneboinapalle", "Cheemalapenta", "Chinapavani", "Gangapalem",

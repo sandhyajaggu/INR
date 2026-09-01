@@ -31,7 +31,7 @@ SELECT id, v FROM mandals, UNNEST(ARRAY[
     'Kancharagunta','Kondamudusu Palem','Kondikandukur','Kovur','Machavaram',
     'Madanagopalapuram','Mahadevapuram (R)','Mopadu','Muppalakesaram','Ogur',
     'Palukur','Palur','Pandalapadu','Vikkiralapeta','Balijapalem','Ganikunta',
-    'Guthikondavaripalem','Kammavaripalem','Narisettivaripalem'
+    'Guthikondavaripalem','Kammavaripalem','Narisettivaripalem','Kandukur Municipality'
 ]) AS v
 WHERE mandals.name = 'Kandukur';
 
