@@ -84,6 +84,8 @@ MANDAL_VILLAGE_ALIASES: dict[str, list[tuple[str, str]]] = {
         ("K RAJUPALEM", "K rajuplalem"),
     ],
     "Voletivaripalem": [
+        ("AYYAVARIPALLI", "Ayyivaripalem"),
+        ("MALAKONDA,RAMALINGAPURAM H/O AYYAVAR IPALLI", "Malakonda"),
         ("NALADALPURU", "Nalandapuru"),
         ("ANKABHUPALAPURAM", "Ankhabhupalapalem"),
         ("SINGAMANENIPALLI", "Sigamanenipalli"),

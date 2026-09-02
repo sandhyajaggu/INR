@@ -40,3 +40,21 @@ def validate_epic_no(value: object) -> str | None:
     if not EPIC_NO_PATTERN.match(normalized):
         raise ValueError("epic_no must be 3 letters followed by 7 digits, e.g. ABC1234567")
     return normalized
+
+
+def coerce_excel_cell_to_str(value: object) -> object:
+    """Coerces a bulk-Excel-upload cell read back as int/float to a plain string.
+
+    openpyxl reads a numeric-looking cell (e.g. a house number typed as a
+    bare number instead of formatted as text) back as an int/float, which
+    pydantic's plain `str` fields reject outright ("Input should be a valid
+    string") instead of validating the format underneath. Whole-number
+    floats drop the trailing ".0" (openpyxl returns a float for any numeric
+    cell, even one holding a whole number). None/str/anything else passes
+    through unchanged for normal validation to handle.
+    """
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value

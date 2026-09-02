@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ORMModel, validate_epic_no
+from app.schemas.common import ORMModel, coerce_excel_cell_to_str, validate_epic_no
 
 MOBILE_PATTERN = r"^[6-9][0-9]{9}$"
 
@@ -120,6 +120,14 @@ class VoterBulkRow(BaseModel):
         if validated is None:
             raise ValueError("epic_no is required")
         return validated
+
+    @field_validator(
+        "name", "relation_name", "house_no", "mobile", "mandal_name", "village_name", "booth_number",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
 
     @field_validator("mobile")
     @classmethod
