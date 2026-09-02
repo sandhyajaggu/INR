@@ -92,8 +92,19 @@ async def search_voters(
     )
 
 
-async def get_voter_or_404(db: AsyncSession, voter_id: int) -> Voter:
-    voter = await db.get(Voter, voter_id)
+async def get_voter_or_404(db: AsyncSession, voter_id: str) -> Voter:
+    """Resolves a voter by internal numeric id or by EPIC number.
+
+    "Voter ID" is commonly understood to mean the EPIC number (e.g.
+    ABC1234567), not the internal numeric primary key — accepting both
+    keeps existing numeric-id callers working while letting a caller look
+    a voter up by EPIC number directly.
+    """
+    if voter_id.isdigit():
+        voter = await db.get(Voter, int(voter_id))
+    else:
+        stmt = select(Voter).where(Voter.epic_no == voter_id.strip().upper())
+        voter = (await db.execute(stmt)).scalar_one_or_none()
     if voter is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voter not found")
     return voter

@@ -68,7 +68,7 @@ async def voter_gender_distribution(db: DbSession, current_user: CurrentUser) ->
 
 
 @router.get("/{voter_id}", response_model=VoterOut, summary="Get one voter")
-async def get_voter(voter_id: int, db: DbSession, current_user: CurrentUser) -> VoterOut:
+async def get_voter(voter_id: str, db: DbSession, current_user: CurrentUser) -> VoterOut:
     voter = await get_voter_or_404(db, voter_id)
     return to_voter_out(voter)
 
@@ -133,7 +133,7 @@ async def bulk_upload_voters(
 
 @router.put("/{voter_id}", response_model=VoterOut, summary="Update a voter")
 async def update_voter(
-    voter_id: int,
+    voter_id: str,
     payload: VoterUpdate,
     db: DbSession,
     current_user: RequireStaff,
@@ -177,7 +177,7 @@ async def update_voter(
     summary="Delete a voter (super_admin only)",
 )
 async def delete_voter(
-    voter_id: int, db: DbSession, current_user: RequireSuperAdmin
+    voter_id: str, db: DbSession, current_user: RequireSuperAdmin
 ) -> None:
     voter = await get_voter_or_404(db, voter_id)
     await log_activity(
@@ -197,7 +197,7 @@ async def delete_voter(
     summary="Reveal a voter's plaintext Aadhaar (super_admin only)",
 )
 async def reveal_voter_aadhaar(
-    voter_id: int, db: DbSession, current_user: RequireSuperAdmin
+    voter_id: str, db: DbSession, current_user: RequireSuperAdmin
 ) -> dict[str, str | None]:
     from app.services.encryption_service import decrypt_aadhaar
 
