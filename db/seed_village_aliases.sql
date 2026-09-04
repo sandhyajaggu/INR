@@ -26,6 +26,7 @@ FROM (VALUES
     ('Gudluru', 'RC Agraharam', 'R.C.AGRAHARAM'),
     ('Gudluru', 'Venkam Peta', 'VENKAMPETA H/O.BASIREDDIPALEM'),
     ('Gudluru', 'Avulavaripalem', 'AVULAVARIPALEM H/O. RAVURU'),
+    ('Gudluru', 'RR colony', 'R&R Colony, Ravuru'),
 
     ('Kandukur', 'Kandukur Municipality', 'KANDUKURU MUNICIPALITY'),
     ('Kandukur', 'Palukur', 'PALUKURU'),
