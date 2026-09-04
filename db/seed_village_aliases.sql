@@ -40,6 +40,7 @@ FROM (VALUES
     ('Kandukur', 'Anantha Sagaram', 'ANANTHASAGARAM'),
     ('Kandukur', 'Jillelamudi', 'JILLELLAMUDI'),
     ('Kandukur', 'Guthikondavaripalem', 'GUTHIKONDAVARIPALEM H/O KOVURU'),
+    ('Kandukur', 'Ganikunta', 'GANIKUNTA, KANDUKURU MUNICIPALITY'),
 
     ('Lingasamudram', 'Veera Raghavuni Kota', 'VEERARAGHAVUNIKOTA'),
     ('Lingasamudram', 'Pedapavni H/O mutyalapadu', 'PEDAPAVANI H/O MUTYALAPADU'),
