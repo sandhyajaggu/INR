@@ -51,6 +51,7 @@ FROM (VALUES
     ('Lingasamudram', 'Pedapavni H/O mutyalapadu', 'PEDAPAVANI H/O. MUTHYALAPADU'),
     ('Lingasamudram', 'satyanarayanapuram H/O pedapavani', 'SATYANARAYANAPURAM H/O.PEDAPAVANI'),
     ('Lingasamudram', 'Medarametlapalem', 'MEDARAMETLAPALEM H/O.MUTHYALAPADU'),
+    ('Lingasamudram', 'Muttvaripalem H/O mutyalapadu', 'MUTTAMVARIPALEM'),
 
     ('Ulavapadu', 'Beemavaram', 'BHEEMAVARAM'),
     ('Ulavapadu', 'Baddepudi', 'BADDIPUDI'),
