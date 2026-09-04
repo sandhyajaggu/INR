@@ -39,6 +39,7 @@ MANDAL_VILLAGE_ALIASES: dict[str, list[tuple[str, str]]] = {
         ("CHIMIDITHIPADU", "Chimidithapadu"),
         ("VENKATESWARAPURAM H/O.DAPPALAMPADU", "Venkateswarapuram H/O dappalmpadu"),
         ("R.C.AGRAHARAM", "RC Agraharam"),
+        ("VENKAMPETA H/O.BASIREDDIPALEM", "Venkam Peta"),
     ],
     "Kandukur": [
         ("KANDUKURU MUNICIPALITY", "Kandukur Municipality"),

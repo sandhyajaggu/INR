@@ -42,6 +42,23 @@ def validate_epic_no(value: object) -> str | None:
     return normalized
 
 
+GENDER_ALIASES = {"MALE": "Male", "M": "Male", "FEMALE": "Female", "F": "Female", "OTHER": "Other", "O": "Other"}
+
+
+def normalize_gender(value: object) -> object:
+    """Normalizes real-world gender-column spellings from bulk-upload sheets.
+
+    Electoral-roll sheets commonly record gender as a single letter (M/F/O)
+    or with inconsistent casing/whitespace (e.g. "male ", "FEMALE") instead
+    of the canonical Male/Female/Other the app stores. An unrecognized value
+    passes through unchanged so the existing pattern validator still rejects
+    genuinely bad data.
+    """
+    if not isinstance(value, str):
+        return value
+    return GENDER_ALIASES.get(value.strip().upper(), value)
+
+
 def coerce_excel_cell_to_str(value: object) -> object:
     """Coerces a bulk-Excel-upload cell read back as int/float to a plain string.
 
