@@ -25,6 +25,7 @@ FROM (VALUES
     ('Gudluru', 'Venkateswarapuram H/O dappalmpadu', 'VENKATESWARAPURAM H/O.DAPPALAMPADU'),
     ('Gudluru', 'RC Agraharam', 'R.C.AGRAHARAM'),
     ('Gudluru', 'Venkam Peta', 'VENKAMPETA H/O.BASIREDDIPALEM'),
+    ('Gudluru', 'Avulavaripalem', 'AVULAVARIPALEM H/O. RAVURU'),
 
     ('Kandukur', 'Kandukur Municipality', 'KANDUKURU MUNICIPALITY'),
     ('Kandukur', 'Palukur', 'PALUKURU'),
