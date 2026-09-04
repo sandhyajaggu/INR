@@ -50,6 +50,7 @@ FROM (VALUES
     ('Lingasamudram', 'Racheruvurajupalem', 'RACHERUVU RAJUPALEM'),
     ('Lingasamudram', 'Pedapavni H/O mutyalapadu', 'PEDAPAVANI H/O. MUTHYALAPADU'),
     ('Lingasamudram', 'satyanarayanapuram H/O pedapavani', 'SATYANARAYANAPURAM H/O.PEDAPAVANI'),
+    ('Lingasamudram', 'Medarametlapalem', 'MEDARAMETLAPALEM H/O.MUTHYALAPADU'),
 
     ('Ulavapadu', 'Beemavaram', 'BHEEMAVARAM'),
     ('Ulavapadu', 'Baddepudi', 'BADDIPUDI'),
