@@ -40,4 +40,6 @@ class PublicVoterLookupOut(ORMModel):
     name: str
     mobile: str | None
     village_id: int
+    village_name: str
     mandal_id: int
+    mandal_name: str
