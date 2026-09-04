@@ -114,10 +114,12 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
     """All-or-nothing bulk import of voters from a parsed Excel sheet.
 
     Every row is validated in full before anything is written: field format,
-    duplicate epic_no within the file, duplicate epic_no already in the
-    database, and resolvable mandal_name/village_name/booth_number. If any
-    row has any problem, nothing is inserted and the complete list of row
-    errors is returned so the whole sheet can be corrected in one pass.
+    duplicate epic_no within the file, and resolvable mandal_name/village_name/
+    booth_number. If any row has any problem, nothing is written and the
+    complete list of row errors is returned so the whole sheet can be
+    corrected in one pass. A row whose epic_no already exists in the database
+    updates that voter's record (the sheet is treated as authoritative for
+    every field) rather than being rejected as a duplicate.
     """
     errors: list[BulkImportRowError] = []
     parsed_rows: list[tuple[int, VoterBulkRow]] = []
@@ -144,6 +146,7 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
         else:
             first_seen[parsed.epic_no] = row_num
 
+    existing_voters: dict[str, Voter] = {}
     if first_seen:
         # A large sheet can carry tens of thousands of epic_nos. SQLAlchemy's
         # .in_() binds one query parameter per value, and PostgreSQL/asyncpg
@@ -151,17 +154,11 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
         # over the full key set can exceed that and crash the request.
         # Batching keeps every query well under the limit.
         epic_keys = list(first_seen.keys())
-        existing_epics: list[str] = []
         batch_size = 5000
         for i in range(0, len(epic_keys), batch_size):
             batch = epic_keys[i : i + batch_size]
-            existing_epics.extend(
-                (await db.execute(select(Voter.epic_no).where(Voter.epic_no.in_(batch)))).scalars().all()
-            )
-        for epic in existing_epics:
-            errors.append(
-                BulkImportRowError(row=first_seen[epic], epic_no=epic, reason="epic_no already exists in the database")
-            )
+            for voter in (await db.execute(select(Voter).where(Voter.epic_no.in_(batch)))).scalars().all():
+                existing_voters[voter.epic_no] = voter
 
     mandal_map, village_map, booth_map = await load_geography_maps(db)
     resolved: list[tuple[VoterBulkRow, int, int, int | None]] = []
@@ -199,14 +196,24 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
     if errors:
         return BulkImportResult(inserted=0, errors=errors)
 
-    voters = []
+    new_voters = []
+    updated_count = 0
     for parsed, mandal_id, village_id, booth_id in resolved:
         data = parsed.model_dump(exclude={"mandal_name", "village_name", "booth_number"})
         if data.get("aadhaar_number"):
             data["aadhaar_number"] = encrypt_aadhaar(data["aadhaar_number"])
-        voters.append(Voter(**data, mandal_id=mandal_id, village_id=village_id, booth_id=booth_id))
+        existing = existing_voters.get(parsed.epic_no)
+        if existing is not None:
+            for field, value in data.items():
+                setattr(existing, field, value)
+            existing.mandal_id = mandal_id
+            existing.village_id = village_id
+            existing.booth_id = booth_id
+            updated_count += 1
+        else:
+            new_voters.append(Voter(**data, mandal_id=mandal_id, village_id=village_id, booth_id=booth_id))
 
-    db.add_all(voters)
+    db.add_all(new_voters)
     await db.flush()
     await log_activity(
         db,
@@ -214,7 +221,7 @@ async def bulk_import_voters(db: AsyncSession, rows: list[dict], actor_id: int) 
         action_type="voter_bulk_imported",
         module="voters",
         reference_id=None,
-        description=f"Bulk import: {len(voters)} voters added",
+        description=f"Bulk import: {len(new_voters)} voters added, {updated_count} updated",
     )
     await db.commit()
-    return BulkImportResult(inserted=len(voters), errors=[])
+    return BulkImportResult(inserted=len(new_voters), updated=updated_count, errors=[])

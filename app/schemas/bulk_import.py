@@ -22,6 +22,7 @@ class BulkImportRowError(BaseModel):
 
 class BulkImportResult(BaseModel):
     inserted: int
+    updated: int = 0
     errors: list[BulkImportRowError] = []
 
 
