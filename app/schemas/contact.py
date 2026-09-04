@@ -26,7 +26,9 @@ class ContactMessageOut(ORMModel):
     name: str | None
     mobile_number: str | None
     village_id: int | None
+    village_name: str | None = None
     mandal_id: int | None
+    mandal_name: str | None = None
     message: str
     status: str
     created_at: datetime
