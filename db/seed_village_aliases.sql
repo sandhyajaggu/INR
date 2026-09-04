@@ -39,6 +39,7 @@ FROM (VALUES
     ('Kandukur', 'Kondikandukur', 'KONDI KANDUKUR'),
     ('Kandukur', 'Anantha Sagaram', 'ANANTHASAGARAM'),
     ('Kandukur', 'Jillelamudi', 'JILLELLAMUDI'),
+    ('Kandukur', 'Guthikondavaripalem', 'GUTHIKONDAVARIPALEM H/O KOVURU'),
 
     ('Lingasamudram', 'Veera Raghavuni Kota', 'VEERARAGHAVUNIKOTA'),
     ('Lingasamudram', 'Pedapavni H/O mutyalapadu', 'PEDAPAVANI H/O MUTYALAPADU'),
