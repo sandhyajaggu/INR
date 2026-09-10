@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 T = TypeVar("T")
 
 EPIC_NO_PATTERN = re.compile(r"^[A-Z]{3}[0-9]{7}$")
+MOBILE_PATTERN = re.compile(r"^[6-9][0-9]{9}$")
 
 
 class ORMModel(BaseModel):
@@ -57,6 +58,31 @@ def normalize_gender(value: object) -> object:
     if not isinstance(value, str):
         return value
     return GENDER_ALIASES.get(value.strip().upper(), value)
+
+
+def validate_mobile_number(value: object) -> str | None:
+    """Shared 10-digit Indian mobile number format check.
+
+    Accepts non-string input the same way validate_epic_no does, so a
+    bulk-Excel-upload cell read back as an int/float fails the format check
+    below like any other bad value instead of raising an uncaught error.
+    """
+    if value is None or value == "":
+        return None
+    normalized = str(value).strip()
+    if not MOBILE_PATTERN.match(normalized):
+        raise ValueError("mobile_number must be a valid 10-digit Indian mobile number")
+    return normalized
+
+
+def validate_aadhaar_number(value: object) -> str | None:
+    """Shared 12-digit Aadhaar format check. See validate_mobile_number."""
+    if value is None or value == "":
+        return None
+    normalized = str(value).strip()
+    if not normalized.isdigit() or len(normalized) != 12:
+        raise ValueError("aadhaar_number must be exactly 12 digits")
+    return normalized
 
 
 def coerce_excel_cell_to_str(value: object) -> object:

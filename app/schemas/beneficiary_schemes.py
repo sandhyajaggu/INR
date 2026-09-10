@@ -17,7 +17,26 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ORMModel, coerce_excel_cell_to_str
+from app.schemas.common import (
+    ORMModel,
+    coerce_excel_cell_to_str,
+    validate_aadhaar_number,
+    validate_mobile_number,
+)
+
+
+def _require_valid_aadhaar(v: object) -> str:
+    validated = validate_aadhaar_number(v)
+    if validated is None:
+        raise ValueError("aadhaar_number is required")
+    return validated
+
+
+def _require_valid_mobile(v: object) -> str:
+    validated = validate_mobile_number(v)
+    if validated is None:
+        raise ValueError("mobile_number is required")
+    return validated
 
 
 # --- CM Relief Fund (cmrf) — no scheme_details fields --------------------
@@ -27,7 +46,7 @@ class CmrfCreate(BaseModel):
     beneficiary_name: str
     relation_name: str
     epic_no: str
-    amount: Decimal
+    amount: Decimal = Field(gt=0)
     mandal_name: str
     village_name: str
     application_date: date
@@ -71,7 +90,7 @@ class AadabiddaNidhiCreate(BaseModel):
     mobile_number: str
     bank_account_number: str
     ifsc_code: str
-    amount: Decimal = Field(description="Monthly amount")
+    amount: Decimal = Field(gt=0, description="Monthly amount")
     mandal_name: str
     village_name: str
     application_date: date
@@ -80,10 +99,20 @@ class AadabiddaNidhiCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @field_validator("bank_account_number", "ifsc_code", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class AadabiddaNidhiUpdate(AadabiddaNidhiCreate):
@@ -129,7 +158,7 @@ class ThallikiVandanamCreate(BaseModel):
     mobile_number: str
     bank_account_number: str
     ifsc_code: str
-    amount: Decimal = Field(description="Annual amount")
+    amount: Decimal = Field(gt=0, description="Annual amount")
     mandal_name: str
     village_name: str
     application_date: date
@@ -138,10 +167,20 @@ class ThallikiVandanamCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @field_validator("bank_account_number", "ifsc_code", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class ThallikiVandanamUpdate(ThallikiVandanamCreate):
@@ -195,12 +234,20 @@ class DeepamSchemeCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator(
-        "ration_card_number", "gas_connection_number", "aadhaar_number", "mobile_number", mode="before"
-    )
+    @field_validator("ration_card_number", "gas_connection_number", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class DeepamSchemeUpdate(DeepamSchemeCreate):
@@ -251,10 +298,20 @@ class MahaShakthiCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator("aadhaar_number", "mobile_number", "bus_pass_number", mode="before")
+    @field_validator("bus_pass_number", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class MahaShakthiUpdate(MahaShakthiCreate):
@@ -297,7 +354,7 @@ class AnnadataSukhibhavaCreate(BaseModel):
     mobile_number: str
     bank_account_number: str
     ifsc_code: str
-    amount: Decimal = Field(description="Annual amount")
+    amount: Decimal = Field(gt=0, description="Annual amount")
     mandal_name: str
     village_name: str
     application_date: date
@@ -306,12 +363,20 @@ class AnnadataSukhibhavaCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator(
-        "survey_number", "aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before"
-    )
+    @field_validator("survey_number", "bank_account_number", "ifsc_code", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class AnnadataSukhibhavaUpdate(AnnadataSukhibhavaCreate):
@@ -357,7 +422,7 @@ class YuvagalamCreate(BaseModel):
     mobile_number: str
     bank_account_number: str
     ifsc_code: str
-    amount: Decimal = Field(description="Monthly allowance")
+    amount: Decimal = Field(gt=0, description="Monthly allowance")
     mandal_name: str
     village_name: str
     application_date: date
@@ -366,10 +431,20 @@ class YuvagalamCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
-    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @field_validator("bank_account_number", "ifsc_code", mode="before")
     @classmethod
     def _coerce_numeric_cells(cls, v: object) -> object:
         return coerce_excel_cell_to_str(v)
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _validate_aadhaar(cls, v: object) -> str:
+        return _require_valid_aadhaar(v)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def _validate_mobile(cls, v: object) -> str:
+        return _require_valid_mobile(v)
 
 
 class YuvagalamUpdate(YuvagalamCreate):
