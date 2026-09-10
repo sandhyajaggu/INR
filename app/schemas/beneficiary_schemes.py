@@ -25,12 +25,12 @@ from app.schemas.common import ORMModel, coerce_excel_cell_to_str
 
 class CmrfCreate(BaseModel):
     beneficiary_name: str
-    relation_name: str | None = None
-    epic_no: str | None = None
-    amount: Decimal | None = None
+    relation_name: str
+    epic_no: str
+    amount: Decimal
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     video_url: str | None = None
     remarks: str | None = None
@@ -62,17 +62,17 @@ class CmrfOut(ORMModel):
 
 class AadabiddaNidhiCreate(BaseModel):
     beneficiary_name: str
-    relation_name: str | None = None
-    epic_no: str | None = None
-    age: int | None = None
-    aadhaar_number: str | None = None
-    mobile_number: str | None = None
-    bank_account_number: str | None = None
-    ifsc_code: str | None = None
-    amount: Decimal | None = Field(default=None, description="Monthly amount")
+    relation_name: str
+    epic_no: str
+    age: int
+    aadhaar_number: str
+    mobile_number: str
+    bank_account_number: str
+    ifsc_code: str
+    amount: Decimal = Field(description="Monthly amount")
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
@@ -116,19 +116,19 @@ class AadabiddaNidhiOut(ORMModel):
 
 class ThallikiVandanamCreate(BaseModel):
     mother_name: str
-    relation_name: str | None = None
-    epic_no: str | None = None
+    relation_name: str
+    epic_no: str
     student_name: str
     school_name: str
     class_grade: str
-    aadhaar_number: str | None = None
-    mobile_number: str | None = None
-    bank_account_number: str | None = None
-    ifsc_code: str | None = None
-    amount: Decimal | None = Field(default=None, description="Annual amount")
+    aadhaar_number: str
+    mobile_number: str
+    bank_account_number: str
+    ifsc_code: str
+    amount: Decimal = Field(description="Annual amount")
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
@@ -174,16 +174,16 @@ class ThallikiVandanamOut(ORMModel):
 
 class DeepamSchemeCreate(BaseModel):
     head_of_household_name: str
-    relation_name: str | None = None
+    relation_name: str
     ration_card_number: str
     gas_connection_number: str
     gas_agency: str
-    aadhaar_number: str | None = None
-    epic_no: str | None = None
-    mobile_number: str | None = None
+    aadhaar_number: str
+    epic_no: str
+    mobile_number: str
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
@@ -228,16 +228,16 @@ class DeepamSchemeOut(ORMModel):
 
 class MahaShakthiCreate(BaseModel):
     beneficiary_name: str
-    relation_name: str | None = None
-    age: int | None = None
-    aadhaar_number: str | None = None
-    mobile_number: str | None = None
+    relation_name: str
+    age: int
+    aadhaar_number: str
+    mobile_number: str
     bus_pass_number: str
-    preferred_route: str | None = None
-    depot: str | None = None
+    preferred_route: str
+    depot: str
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
@@ -279,18 +279,18 @@ class MahaShakthiOut(ORMModel):
 
 class AnnadataSukhibhavaCreate(BaseModel):
     farmer_name: str
-    relation_name: str | None = None
+    relation_name: str
     land_extent_acres: float
     survey_number: str
-    aadhaar_number: str | None = None
-    epic_no: str | None = None
-    mobile_number: str | None = None
-    bank_account_number: str | None = None
-    ifsc_code: str | None = None
-    amount: Decimal | None = Field(default=None, description="Annual amount")
+    aadhaar_number: str
+    epic_no: str
+    mobile_number: str
+    bank_account_number: str
+    ifsc_code: str
+    amount: Decimal = Field(description="Annual amount")
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
@@ -337,18 +337,18 @@ class AnnadataSukhibhavaOut(ORMModel):
 
 class YuvagalamCreate(BaseModel):
     beneficiary_name: str
-    relation_name: str | None = None
-    epic_no: str | None = None
-    age: int | None = None
+    relation_name: str
+    epic_no: str
+    age: int
     qualification: str
-    aadhaar_number: str | None = None
-    mobile_number: str | None = None
-    bank_account_number: str | None = None
-    ifsc_code: str | None = None
-    amount: Decimal | None = Field(default=None, description="Monthly allowance")
+    aadhaar_number: str
+    mobile_number: str
+    bank_account_number: str
+    ifsc_code: str
+    amount: Decimal = Field(description="Monthly allowance")
     mandal_name: str
     village_name: str
-    application_date: date | None = None
+    application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str | None = None
     document_url: str | None = None
