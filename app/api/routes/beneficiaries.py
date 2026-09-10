@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select, text
 
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
+from app.models.geography import Mandal, Village
 from app.models.schemes import Beneficiary, Scheme
 from app.schemas.beneficiaries import BeneficiaryGeographyRow, BeneficiaryLookupResult, BeneficiaryOut
 from app.schemas.bulk_import import BulkImportResult, capped_error_detail
@@ -29,7 +30,7 @@ from app.services.excel_import_service import parse_excel_workbook
 router = APIRouter(prefix="/beneficiaries", tags=["Beneficiaries"])
 
 
-def _to_out(obj: Beneficiary) -> BeneficiaryOut:
+def _to_out(obj: Beneficiary, village_name: str | None = None, mandal_name: str | None = None) -> BeneficiaryOut:
     return BeneficiaryOut(
         id=obj.id,
         scheme_id=obj.scheme_id,
@@ -45,7 +46,9 @@ def _to_out(obj: Beneficiary) -> BeneficiaryOut:
         ifsc_code=obj.ifsc_code,
         amount=obj.amount,
         village_id=obj.village_id,
+        village_name=village_name,
         mandal_id=obj.mandal_id,
+        mandal_name=mandal_name,
         application_date=obj.application_date,
         status=obj.status,
         photo_url=obj.photo_url,
@@ -56,6 +59,20 @@ def _to_out(obj: Beneficiary) -> BeneficiaryOut:
         created_at=obj.created_at,
         updated_at=obj.updated_at,
     )
+
+
+async def _names_for(db: DbSession, mandal_id: int | None, village_id: int | None) -> tuple[str | None, str | None]:
+    mandal_name = (
+        (await db.execute(select(Mandal.name).where(Mandal.id == mandal_id))).scalar_one_or_none()
+        if mandal_id is not None
+        else None
+    )
+    village_name = (
+        (await db.execute(select(Village.name).where(Village.id == village_id))).scalar_one_or_none()
+        if village_id is not None
+        else None
+    )
+    return mandal_name, village_name
 
 
 @router.get(
@@ -72,7 +89,11 @@ async def list_beneficiaries(
     village_id: int | None = Query(None),
     status: str | None = Query(None),
 ) -> PaginatedResponse[BeneficiaryOut]:
-    stmt = select(Beneficiary)
+    stmt = (
+        select(Beneficiary, Mandal.name, Village.name)
+        .outerjoin(Mandal, Mandal.id == Beneficiary.mandal_id)
+        .outerjoin(Village, Village.id == Beneficiary.village_id)
+    )
     count_stmt = select(func.count()).select_from(Beneficiary)
     conditions = []
 
@@ -99,10 +120,10 @@ async def list_beneficiaries(
 
     total = (await db.execute(count_stmt)).scalar_one()
     stmt = stmt.order_by(Beneficiary.id.desc()).offset((page - 1) * page_size).limit(page_size)
-    items = (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt)).all()
 
     return PaginatedResponse(
-        items=[_to_out(i) for i in items],
+        items=[_to_out(i, village_name, mandal_name) for i, mandal_name, village_name in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -170,7 +191,9 @@ async def beneficiaries_by_geography(db: DbSession, current_user: CurrentUser) -
 
 @router.get("/{beneficiary_id}", response_model=BeneficiaryOut, summary="Get one beneficiary (any scheme)")
 async def get_beneficiary(beneficiary_id: int, db: DbSession, current_user: CurrentUser) -> BeneficiaryOut:
-    return _to_out(await get_beneficiary_or_404(db, beneficiary_id))
+    obj = await get_beneficiary_or_404(db, beneficiary_id)
+    mandal_name, village_name = await _names_for(db, obj.mandal_id, obj.village_id)
+    return _to_out(obj, village_name, mandal_name)
 
 
 @router.delete(

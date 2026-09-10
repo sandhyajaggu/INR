@@ -48,7 +48,9 @@ class CmrfOut(ORMModel):
     voter_id: int | None
     amount: Decimal | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     video_url: str | None
@@ -101,7 +103,9 @@ class AadabiddaNidhiOut(ORMModel):
     ifsc_code: str | None
     amount: Decimal | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
@@ -159,7 +163,9 @@ class ThallikiVandanamOut(ORMModel):
     ifsc_code: str | None
     amount: Decimal | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
@@ -213,7 +219,9 @@ class DeepamSchemeOut(ORMModel):
     voter_id: int | None
     mobile_number: str | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
@@ -264,7 +272,9 @@ class MahaShakthiOut(ORMModel):
     preferred_route: str | None
     depot: str | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
@@ -322,7 +332,9 @@ class AnnadataSukhibhavaOut(ORMModel):
     ifsc_code: str | None
     amount: Decimal | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
@@ -378,7 +390,9 @@ class YuvagalamOut(ORMModel):
     ifsc_code: str | None
     amount: Decimal | None
     mandal_id: int
+    mandal_name: str | None = None
     village_id: int
+    village_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None

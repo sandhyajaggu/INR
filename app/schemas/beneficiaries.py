@@ -30,7 +30,9 @@ class BeneficiaryOut(ORMModel):
     ifsc_code: str | None
     amount: Decimal | None
     village_id: int
+    village_name: str | None = None
     mandal_id: int
+    mandal_name: str | None = None
     application_date: date | None
     status: str
     photo_url: str | None
