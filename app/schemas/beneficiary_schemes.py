@@ -31,7 +31,7 @@ class CmrfCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     video_url: str
     remarks: str | None = None
 
@@ -73,7 +73,7 @@ class AadabiddaNidhiCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
@@ -129,7 +129,7 @@ class ThallikiVandanamCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
@@ -184,7 +184,7 @@ class DeepamSchemeCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
@@ -238,7 +238,7 @@ class MahaShakthiCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
@@ -291,7 +291,7 @@ class AnnadataSukhibhavaCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
@@ -349,7 +349,7 @@ class YuvagalamCreate(BaseModel):
     mandal_name: str
     village_name: str
     application_date: date
-    status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
+    status: str = Field(pattern="^(pending|approved|rejected|disbursed)$")
     photo_url: str
     document_url: str | None = None
     remarks: str | None = None
