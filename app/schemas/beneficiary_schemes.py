@@ -15,9 +15,9 @@ ergonomics improvement.
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ORMModel
+from app.schemas.common import ORMModel, coerce_excel_cell_to_str
 
 
 # --- CM Relief Fund (cmrf) — no scheme_details fields --------------------
@@ -78,6 +78,11 @@ class AadabiddaNidhiCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
+    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
+
 
 class AadabiddaNidhiUpdate(AadabiddaNidhiCreate):
     pass
@@ -129,6 +134,11 @@ class ThallikiVandanamCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
+    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
+
 
 class ThallikiVandanamUpdate(ThallikiVandanamCreate):
     pass
@@ -179,6 +189,13 @@ class DeepamSchemeCreate(BaseModel):
     document_url: str | None = None
     remarks: str | None = None
 
+    @field_validator(
+        "ration_card_number", "gas_connection_number", "aadhaar_number", "mobile_number", mode="before"
+    )
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
+
 
 class DeepamSchemeUpdate(DeepamSchemeCreate):
     pass
@@ -225,6 +242,11 @@ class MahaShakthiCreate(BaseModel):
     photo_url: str | None = None
     document_url: str | None = None
     remarks: str | None = None
+
+    @field_validator("aadhaar_number", "mobile_number", "bus_pass_number", mode="before")
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
 
 
 class MahaShakthiUpdate(MahaShakthiCreate):
@@ -273,6 +295,13 @@ class AnnadataSukhibhavaCreate(BaseModel):
     photo_url: str | None = None
     document_url: str | None = None
     remarks: str | None = None
+
+    @field_validator(
+        "survey_number", "aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before"
+    )
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
 
 
 class AnnadataSukhibhavaUpdate(AnnadataSukhibhavaCreate):
@@ -324,6 +353,11 @@ class YuvagalamCreate(BaseModel):
     photo_url: str | None = None
     document_url: str | None = None
     remarks: str | None = None
+
+    @field_validator("aadhaar_number", "mobile_number", "bank_account_number", "ifsc_code", mode="before")
+    @classmethod
+    def _coerce_numeric_cells(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
 
 
 class YuvagalamUpdate(YuvagalamCreate):
