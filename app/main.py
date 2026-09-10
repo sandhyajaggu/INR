@@ -1,6 +1,13 @@
+import asyncio
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
+
+if sys.platform == "win32":
+    # asyncpg's SSL handshake times out intermittently under the default
+    # ProactorEventLoop on Windows; the selector loop doesn't have this issue.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
