@@ -32,7 +32,7 @@ class CmrfCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    video_url: str | None = None
+    video_url: str
     remarks: str | None = None
 
 
@@ -74,7 +74,7 @@ class AadabiddaNidhiCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
@@ -130,7 +130,7 @@ class ThallikiVandanamCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
@@ -185,7 +185,7 @@ class DeepamSchemeCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
@@ -239,7 +239,7 @@ class MahaShakthiCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
@@ -292,7 +292,7 @@ class AnnadataSukhibhavaCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
@@ -350,7 +350,7 @@ class YuvagalamCreate(BaseModel):
     village_name: str
     application_date: date
     status: str = Field(default="pending", pattern="^(pending|approved|rejected|disbursed)$")
-    photo_url: str | None = None
+    photo_url: str
     document_url: str | None = None
     remarks: str | None = None
 
