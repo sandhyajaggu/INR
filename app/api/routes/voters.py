@@ -11,7 +11,7 @@ from app.services.activity_service import log_activity
 from app.services.encryption_service import encrypt_aadhaar
 from app.services.excel_import_service import parse_excel_rows
 from app.services.geography_service import resolve_geography
-from app.services.voter_service import bulk_import_voters, get_voter_or_404, search_voters, to_voter_out
+from app.services.voter_service import bulk_import_voters, get_voter_or_404, search_voters, voter_outs
 from app.services.voter_template_service import build_voter_template
 
 router = APIRouter(prefix="/voters", tags=["Voters"])
@@ -92,7 +92,7 @@ async def download_voter_template(db: DbSession, current_user: RequireStaff) -> 
 @router.get("/{voter_id}", response_model=VoterOut, summary="Get one voter")
 async def get_voter(voter_id: str, db: DbSession, current_user: CurrentUser) -> VoterOut:
     voter = await get_voter_or_404(db, voter_id)
-    return to_voter_out(voter)
+    return (await voter_outs(db, [voter]))[0]
 
 
 @router.post("", response_model=VoterOut, status_code=status.HTTP_201_CREATED, summary="Add a voter")
@@ -127,7 +127,7 @@ async def create_voter(
     )
     await db.commit()
     await db.refresh(voter)
-    return to_voter_out(voter)
+    return (await voter_outs(db, [voter]))[0]
 
 
 @router.post(
@@ -190,7 +190,7 @@ async def update_voter(
     )
     await db.commit()
     await db.refresh(voter)
-    return to_voter_out(voter)
+    return (await voter_outs(db, [voter]))[0]
 
 
 @router.delete(

@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.geography import Booth, Mandal, Village
 from app.models.voters import Voter
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.schemas.common import PaginatedResponse
@@ -14,7 +15,12 @@ from app.services.encryption_service import encrypt_aadhaar
 from app.services.geography_service import load_geography_maps
 
 
-def to_voter_out(voter: Voter) -> VoterOut:
+def to_voter_out(
+    voter: Voter,
+    mandal_name: str | None = None,
+    village_name: str | None = None,
+    booth_number: str | None = None,
+) -> VoterOut:
     from app.services.encryption_service import mask_aadhaar
 
     return VoterOut(
@@ -28,14 +34,35 @@ def to_voter_out(voter: Voter) -> VoterOut:
         aadhaar_masked=mask_aadhaar(voter.aadhaar_number),
         house_no=voter.house_no,
         village_id=voter.village_id,
+        village_name=village_name,
         mandal_id=voter.mandal_id,
+        mandal_name=mandal_name,
         booth_id=voter.booth_id,
+        booth_number=booth_number,
         voted_last_election=voter.voted_last_election,
         is_new_voter=voter.is_new_voter,
         photo_url=voter.photo_url,
         created_at=voter.created_at,
         updated_at=voter.updated_at,
     )
+
+
+async def voter_outs(db: AsyncSession, voters: list[Voter]) -> list[VoterOut]:
+    """VoterOut for each voter, with mandal/village names and booth number filled in.
+
+    One query for the whole page instead of one per voter.
+    """
+    if not voters:
+        return []
+    stmt = (
+        select(Voter.id, Mandal.name, Village.name, Booth.booth_number)
+        .join(Mandal, Mandal.id == Voter.mandal_id)
+        .join(Village, Village.id == Voter.village_id)
+        .outerjoin(Booth, Booth.id == Voter.booth_id)
+        .where(Voter.id.in_([v.id for v in voters]))
+    )
+    names = {row[0]: row[1:] for row in (await db.execute(stmt)).all()}
+    return [to_voter_out(v, *names.get(v.id, (None, None, None))) for v in voters]
 
 
 async def search_voters(
@@ -84,7 +111,7 @@ async def search_voters(
     voters = (await db.execute(stmt)).scalars().all()
 
     return PaginatedResponse(
-        items=[to_voter_out(v) for v in voters],
+        items=await voter_outs(db, list(voters)),
         total=total,
         page=page,
         page_size=page_size,

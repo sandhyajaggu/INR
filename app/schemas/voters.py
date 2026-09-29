@@ -67,8 +67,11 @@ class VoterOut(ORMModel):
     aadhaar_masked: str | None = None
     house_no: str | None
     village_id: int
+    village_name: str | None = None
     mandal_id: int
+    mandal_name: str | None = None
     booth_id: int | None
+    booth_number: str | None = None
     voted_last_election: bool | None
     is_new_voter: bool
     photo_url: str | None
