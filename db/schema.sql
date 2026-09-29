@@ -53,6 +53,8 @@ CREATE TABLE booths (
     tdp_votes             INT NOT NULL DEFAULT 0,
     ysp_votes             INT NOT NULL DEFAULT 0,
     janasena_votes        INT NOT NULL DEFAULT 0,
+    congress_votes        INT NOT NULL DEFAULT 0,
+    votes_polled          INT NOT NULL DEFAULT 0,
     status                VARCHAR(20),
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (mandal_id, booth_number)

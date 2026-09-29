@@ -17,9 +17,11 @@ BOOTH_SHEET_COLUMNS: dict[str, str] = {
     "Mandal": "mandal",
     "Village": "village",
     "Registered Votes": "registered_votes",
+    "Votes Polled": "votes_polled",
     "TDP": "tdp",
     "YSP": "ysp",
     "Janasena": "janasena",
+    "Congress": "congress",
     "Status": "status",
 }
 BOOTH_COLUMN_LABELS = {key: label for label, key in BOOTH_SHEET_COLUMNS.items()}
@@ -31,9 +33,11 @@ class BoothBulkRow(BaseModel):
     mandal: str
     village: str
     registered_votes: int = Field(ge=0)
+    votes_polled: int = Field(ge=0)
     tdp: int = Field(ge=0)
     ysp: int = Field(ge=0)
     janasena: int = Field(ge=0)
+    congress: int = Field(ge=0)
     status: str
 
     @field_validator("booth_no", mode="before")
@@ -62,10 +66,14 @@ class BoothBulkRow(BaseModel):
         raise ValueError(f"must be 'On Time' or 'Delayed', got '{v}'")
 
     @model_validator(mode="after")
-    def _party_votes_within_registered(self) -> "BoothBulkRow":
-        party_total = self.tdp + self.ysp + self.janasena
+    def _votes_within_registered(self) -> "BoothBulkRow":
+        if self.votes_polled > self.registered_votes:
+            raise ValueError(
+                f"Votes Polled ({self.votes_polled}) is more than Registered Votes ({self.registered_votes})"
+            )
+        party_total = self.tdp + self.ysp + self.janasena + self.congress
         if party_total > self.registered_votes:
             raise ValueError(
-                f"TDP + YSP + Janasena ({party_total}) is more than Registered Votes ({self.registered_votes})"
+                f"TDP + YSP + Janasena + Congress ({party_total}) is more than Registered Votes ({self.registered_votes})"
             )
         return self

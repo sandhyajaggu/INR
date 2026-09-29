@@ -68,5 +68,7 @@ class Booth(Base):
     tdp_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     ysp_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     janasena_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    congress_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    votes_polled: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     status: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")

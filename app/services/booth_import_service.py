@@ -31,8 +31,8 @@ from app.services.excel_import_service import (
 from app.services.geography_service import load_geography_maps
 
 TEMPLATE_EXAMPLE_ROWS = [
-    ["001", "Ravi Kumar", "Kandukur", "Palur", 980, 320, 180, 60, "On Time"],
-    ["002", "Suresh Babu", "Kandukur", "Ogur", 850, 290, 160, 40, "Delayed"],
+    ["001", "Ravi Kumar", "Kandukur", "Palur", 1000, 420, 210, 150, 30, 30, "On Time"],
+    ["002", "Suresh Babu", "Kandukur", "Ogur", 950, 380, 160, 180, 10, 30, "Delayed"],
 ]
 
 
@@ -184,9 +184,11 @@ async def bulk_import_booths(db: AsyncSession, rows: list[dict], actor_id: int) 
             "village_id": village_id,
             "booth_officer_name": parsed.in_charge,
             "total_voters": parsed.registered_votes,
+            "votes_polled": parsed.votes_polled,
             "tdp_votes": parsed.tdp,
             "ysp_votes": parsed.ysp,
             "janasena_votes": parsed.janasena,
+            "congress_votes": parsed.congress,
             "status": parsed.status,
         }
         booth = existing.get((mandal_id, parsed.booth_no))
@@ -224,7 +226,7 @@ def build_booth_template() -> bytes:
     # Text format on Booth No keeps leading zeros ("001") when users type new rows.
     for r in range(2, 1001):
         sheet.cell(r, 1).number_format = "@"
-    for col, width in zip("ABCDEFGHI", (10, 22, 18, 20, 17, 8, 8, 10, 10)):
+    for col, width in zip("ABCDEFGHIJK", (10, 22, 18, 20, 17, 13, 8, 8, 10, 10, 10)):
         sheet.column_dimensions[col].width = width
     sheet.freeze_panes = "A2"
     buffer = io.BytesIO()

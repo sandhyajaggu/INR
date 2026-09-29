@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response, UploadFile, status
 
-from app.core.dependencies import CurrentUser, DbSession, RequireStaff
+from app.core.dependencies import DbSession, RequireSuperAdmin
 from app.schemas.bulk_import import BulkImportResult, capped_error_detail
 from app.services.booth_import_service import build_booth_template, bulk_import_booths, parse_booth_upload
 
@@ -15,7 +15,7 @@ XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
     response_class=Response,
     responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
 )
-async def download_booth_template(current_user: CurrentUser) -> Response:
+async def download_booth_template(current_user: RequireSuperAdmin) -> Response:
     return Response(
         content=build_booth_template(),
         media_type=XLSX_MEDIA_TYPE,
@@ -28,13 +28,13 @@ async def download_booth_template(current_user: CurrentUser) -> Response:
     response_model=BulkImportResult,
     summary="Bulk-import booths from an Excel (.xlsx / .xls) or CSV file",
     description=(
-        "Columns: Booth No, In Charge, Mandal, Village, Registered Votes, TDP, YSP, Janasena, "
-        "Status (On Time / Delayed) — all mandatory. A row whose Mandal + Booth No already exists "
+        "Super Admin only. Columns: Booth No, In Charge, Mandal, Village, Registered Votes, Votes Polled, "
+        "TDP, YSP, Janasena, Congress, Status (On Time / Delayed) — all mandatory. A row whose Mandal + Booth No already exists "
         "updates that booth; other rows add new booths. All-or-nothing: if any row fails, nothing "
         "is written and the full list of row errors is returned instead."
     ),
 )
-async def bulk_upload_booths(file: UploadFile, db: DbSession, current_user: RequireStaff) -> BulkImportResult:
+async def bulk_upload_booths(file: UploadFile, db: DbSession, current_user: RequireSuperAdmin) -> BulkImportResult:
     rows = await parse_booth_upload(file)
     result = await bulk_import_booths(db, rows, actor_id=current_user.id)
     if result.errors:

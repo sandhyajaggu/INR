@@ -28,6 +28,7 @@ from app.api.routes import (
     dashboard,
     development_works,
     events,
+    geography,
     files,
     gallery,
     janata_darbar,
@@ -67,6 +68,7 @@ app.mount(settings.upload_base_url, StaticFiles(directory=settings.upload_dir), 
 # --- Auth & files -------------------------------------------------------
 app.include_router(auth.router)
 app.include_router(files.router)
+app.include_router(geography.router)
 
 # --- Core modules -----------------------------------------------------------
 # NOTE: each *.extra_router (static sub-paths like /status-summary, /upcoming)
