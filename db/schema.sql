@@ -50,6 +50,10 @@ CREATE TABLE booths (
     total_voters          INT DEFAULT 0,
     booth_officer_name    VARCHAR(150),
     booth_officer_mobile  VARCHAR(15),
+    tdp_votes             INT NOT NULL DEFAULT 0,
+    ysp_votes             INT NOT NULL DEFAULT 0,
+    janasena_votes        INT NOT NULL DEFAULT 0,
+    status                VARCHAR(20),
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (mandal_id, booth_number)
 );

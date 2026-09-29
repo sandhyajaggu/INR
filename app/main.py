@@ -23,6 +23,7 @@ from app.api.routes import (
     beneficiaries_thalliki_vandanam,
     beneficiaries_yuvagalam,
     booths,
+    booths_bulk,
     contact,
     dashboard,
     development_works,
@@ -73,6 +74,7 @@ app.include_router(files.router)
 # router's bare "/{item_id}" path param would otherwise swallow those static
 # paths and 422 on them before they're ever reached.
 app.include_router(voters.router)
+app.include_router(booths_bulk.router)
 app.include_router(booths.router)
 app.include_router(development_works.extra_router)
 app.include_router(development_works.router)

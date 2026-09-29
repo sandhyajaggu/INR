@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
 
@@ -27,6 +27,10 @@ class BoothCreate(BaseModel):
     total_voters: int | None = 0
     booth_officer_name: str | None = None
     booth_officer_mobile: str | None = None
+    tdp_votes: int = Field(default=0, ge=0)
+    ysp_votes: int = Field(default=0, ge=0)
+    janasena_votes: int = Field(default=0, ge=0)
+    status: str | None = Field(default=None, pattern="^(On Time|Delayed)$")
 
 
 class BoothUpdate(BoothCreate):
@@ -43,4 +47,8 @@ class BoothOut(ORMModel):
     total_voters: int | None
     booth_officer_name: str | None
     booth_officer_mobile: str | None
+    tdp_votes: int
+    ysp_votes: int
+    janasena_votes: int
+    status: str | None
     created_at: datetime
