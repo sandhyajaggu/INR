@@ -23,7 +23,7 @@ from app.models.schemes import Beneficiary, Scheme
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError, capped_error_detail
 from app.schemas.common import PaginatedResponse
 from app.services.activity_service import log_activity
-from app.services.beneficiary_service import link_voter_by_epic
+from app.services.beneficiary_service import bulk_row_schema, link_voter_by_epic
 from app.services.bulk_template_service import (
     XLSX_MEDIA_TYPE,
     TemplateSheet,
@@ -189,13 +189,14 @@ def build_beneficiary_scheme_router(
         responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
     )
     async def download_template(db: DbSession, current_user: RequireStaff) -> Response:
+        row_schema = bulk_row_schema(create_schema)
         spec = TemplateSheet(
             title=scheme_code,
-            columns=columns_from_schema(create_schema, await mandal_names(db)),
-            example_rows=[example_row(create_schema)],
+            columns=columns_from_schema(row_schema, await mandal_names(db)),
+            example_rows=[example_row(row_schema)],
         )
         return Response(
-            content=build_single_sheet_template(spec, standard_notes(["Photo / Video URL: upload each file first with the File Upload (POST /files/upload) and paste the link it returns."])),
+            content=build_single_sheet_template(spec, standard_notes(["Photo / Video URL are optional in bulk upload: leave them blank and add the photo or video later by editing the record."])),
             media_type=XLSX_MEDIA_TYPE,
             headers=xlsx_attachment_headers(f"{scheme_code}_template.xlsx"),
         )
@@ -257,7 +258,8 @@ def build_beneficiary_scheme_router(
         summary=f"Bulk-import {resource_label} from an Excel (.xlsx) sheet",
         description=(
             "All-or-nothing import: every row is validated first against this scheme's "
-            "own field rules (same as the manual 'Add' form), with mandal_name/village_name "
+            "own field rules (same as the manual 'Add' form, except photo/video links are "
+            "optional here — add them later by editing the record), with mandal_name/village_name "
             "resolvable. If any row fails, nothing is written and the full list of row "
             "errors is returned instead. Beneficiaries have no uniqueness constraint on "
             "epic_no, so unlike voters there's no duplicate-row rejection."
@@ -267,8 +269,9 @@ def build_beneficiary_scheme_router(
         file: UploadFile, db: DbSession, current_user: RequireStaff
     ) -> Any:
         scheme_id = await _get_scheme_id(db, scheme_code)
+        row_schema = bulk_row_schema(create_schema)
         required_columns = {
-            name for name, field in create_schema.model_fields.items() if field.is_required()
+            name for name, field in row_schema.model_fields.items() if field.is_required()
         }
         rows = await parse_excel_rows(file, required_columns=required_columns)
 
@@ -277,7 +280,7 @@ def build_beneficiary_scheme_router(
         for raw in rows:
             row_num = raw.get("_row_number")
             try:
-                parsed_rows.append((row_num, create_schema.model_validate(raw)))  # type: ignore[attr-defined]
+                parsed_rows.append((row_num, row_schema.model_validate(raw)))
             except ValidationError as exc:
                 reason = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
                 epic_hint = str(raw.get("epic_no") or "").strip().upper() or None

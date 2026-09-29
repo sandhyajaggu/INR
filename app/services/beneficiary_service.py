@@ -1,7 +1,8 @@
+from functools import cache
 from typing import Type
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,24 @@ SCHEME_REGISTRY: dict[str, tuple[Type[BaseModel], str]] = {
     "annadata_sukhibhava": (AnnadataSukhibhavaCreate, "farmer_name"),
     "yuvagalam": (YuvagalamCreate, "beneficiary_name"),
 }
+
+# Photo/video links are mandatory on the Add/Edit form but optional in bulk
+# uploads: a spreadsheet can't carry the files, so staff add them afterwards
+# by editing each record.
+BULK_OPTIONAL_FIELDS = ("photo_url", "video_url")
+
+
+@cache
+def bulk_row_schema(schema: Type[BaseModel]) -> Type[BaseModel]:
+    """The scheme's create schema with BULK_OPTIONAL_FIELDS made optional.
+
+    Every other field and validator is inherited unchanged, and field order
+    is kept, so bulk templates still list columns in form order.
+    """
+    overrides = {f: (str | None, None) for f in BULK_OPTIONAL_FIELDS if f in schema.model_fields}
+    if not overrides:
+        return schema
+    return create_model(f"{schema.__name__}BulkRow", __base__=schema, **overrides)
 
 
 async def link_voter_by_epic(db: AsyncSession, epic_no: str | None) -> int | None:
@@ -92,7 +111,7 @@ async def bulk_import_all_beneficiaries(
     for scheme_code, rows in sheets.items():
         if scheme_code not in scheme_ids:
             continue
-        create_schema, _ = SCHEME_REGISTRY[scheme_code]
+        create_schema = bulk_row_schema(SCHEME_REGISTRY[scheme_code][0])
         for raw in rows:
             row_num = raw.get("_row_number")
             try:

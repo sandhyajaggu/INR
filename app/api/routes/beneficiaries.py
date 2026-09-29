@@ -22,6 +22,7 @@ from app.services.activity_service import log_activity
 from app.services.beneficiary_service import (
     SCHEME_REGISTRY,
     bulk_import_all_beneficiaries,
+    bulk_row_schema,
     get_beneficiary_or_404,
 )
 from app.services.bulk_template_service import (
@@ -175,7 +176,7 @@ async def bulk_upload_all_beneficiaries(
 async def download_all_schemes_template(db: DbSession, current_user: RequireStaff) -> Response:
     mandals = await mandal_names(db)
     specs = [
-        TemplateSheet(title=code, columns=columns_from_schema(schema, mandals))
+        TemplateSheet(title=code, columns=columns_from_schema(bulk_row_schema(schema), mandals))
         for code, (schema, _) in SCHEME_REGISTRY.items()
     ]
     return Response(
