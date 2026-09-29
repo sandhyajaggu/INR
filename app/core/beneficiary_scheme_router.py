@@ -13,7 +13,7 @@ routed to one of three places automatically:
 from math import ceil
 from typing import Any, Type
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 
@@ -24,6 +24,16 @@ from app.schemas.bulk_import import BulkImportResult, BulkImportRowError, capped
 from app.schemas.common import PaginatedResponse
 from app.services.activity_service import log_activity
 from app.services.beneficiary_service import link_voter_by_epic
+from app.services.bulk_template_service import (
+    XLSX_MEDIA_TYPE,
+    TemplateSheet,
+    build_single_sheet_template,
+    columns_from_schema,
+    example_row,
+    mandal_names,
+    standard_notes,
+    xlsx_attachment_headers,
+)
 from app.services.encryption_service import encrypt_aadhaar, mask_aadhaar
 from app.services.excel_import_service import parse_excel_rows
 from app.services.geography_service import load_geography_maps, resolve_geography
@@ -165,6 +175,29 @@ def build_beneficiary_scheme_router(
             page=page,
             page_size=page_size,
             pages=ceil(total / page_size) if page_size else 0,
+        )
+
+    @router.get(
+        "/bulk-upload/template",
+        summary=f"Download the {resource_label} bulk-upload template (.xlsx)",
+        description=(
+            "Template for this scheme's POST .../bulk-upload, generated from the same field rules: "
+            "required columns in red, one example row, dropdowns for Mandal / Status, and an "
+            "Instructions sheet."
+        ),
+        response_class=Response,
+        responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
+    )
+    async def download_template(db: DbSession, current_user: RequireStaff) -> Response:
+        spec = TemplateSheet(
+            title=scheme_code,
+            columns=columns_from_schema(create_schema, await mandal_names(db)),
+            example_rows=[example_row(create_schema)],
+        )
+        return Response(
+            content=build_single_sheet_template(spec, standard_notes(["Photo / Video URL: upload each file first with the File Upload (POST /files/upload) and paste the link it returns."])),
+            media_type=XLSX_MEDIA_TYPE,
+            headers=xlsx_attachment_headers(f"{scheme_code}_template.xlsx"),
         )
 
     @router.get("/{item_id}", response_model=out_schema, summary=f"Get one {_singularize(resource_label)}")

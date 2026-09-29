@@ -12,8 +12,6 @@ import io
 
 import xlrd
 from fastapi import HTTPException, UploadFile, status
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +21,12 @@ from app.schemas.booth_bulk import BOOTH_COLUMN_LABELS, BOOTH_SHEET_COLUMNS, Boo
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.services.activity_service import log_activity
 from app.services.booth_service import _booth_rows_query, _ordered
+from app.services.bulk_template_service import (
+    TemplateColumn,
+    TemplateSheet,
+    build_single_sheet_template,
+    mandal_names,
+)
 from app.services.excel_import_service import (
     MAX_ROWS_PER_SHEET,
     _load_workbook_from_upload,
@@ -228,21 +232,29 @@ async def build_booth_template(db: AsyncSession) -> bytes:
          b.tdp_votes, b.ysp_votes, b.janasena_votes, b.congress_votes, b.status]
         for b, mandal, village in (await db.execute(_ordered(_booth_rows_query()))).all()
     ]
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Booths"
-    sheet.append(list(BOOTH_SHEET_COLUMNS))
-    for cell in sheet[1]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="0B1F3A")
-    for row in booths or TEMPLATE_EXAMPLE_ROWS:
-        sheet.append(row)
-    # Text format on Booth No keeps leading zeros ("001") when users type new rows.
-    for r in range(2, sheet.max_row + 1000):
-        sheet.cell(r, 1).number_format = "@"
-    for col, width in zip("ABCDEFGHIJK", (10, 22, 18, 20, 17, 13, 8, 8, 10, 10, 10)):
-        sheet.column_dimensions[col].width = width
-    sheet.freeze_panes = "A2"
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    spec = TemplateSheet("Booths", booth_template_columns(await mandal_names(db)), booths or TEMPLATE_EXAMPLE_ROWS)
+    notes = [
+        "All columns are required; hover a header to see its rule.",
+        "This file lists the current booths: edit them and upload the file back. A row whose Mandal + Booth No "
+        "already exists updates that booth; new rows add booths.",
+        "Accepted files: .xlsx, .xls or .csv.",
+        "If any row has a problem, nothing is saved and every problem is listed with its row number.",
+    ]
+    return build_single_sheet_template(spec, notes)
+
+
+def booth_template_columns(mandals: list[str]) -> list[TemplateColumn]:
+    votes = "Whole number, 0 or more"
+    return [
+        TemplateColumn("Booth No", True, "Booth number as printed, e.g. 001", as_text=True),
+        TemplateColumn("In Charge", True, "Booth in-charge name"),
+        TemplateColumn("Mandal", True, "One of the mandals in the dropdown", choices=mandals or None),
+        TemplateColumn("Village", True, "Village in that mandal"),
+        TemplateColumn("Registered Votes", True, "Whole number"),
+        TemplateColumn("Votes Polled", True, "Whole number, not more than Registered Votes"),
+        TemplateColumn("TDP", True, votes),
+        TemplateColumn("YSP", True, votes),
+        TemplateColumn("Janasena", True, votes),
+        TemplateColumn("Congress", True, f"{votes}. TDP + YSP + Janasena + Congress must not exceed Registered Votes"),
+        TemplateColumn("Status", True, "On Time or Delayed", choices=["On Time", "Delayed"]),
+    ]

@@ -9,7 +9,7 @@ by-geography aggregate, delete-by-id, and the Aadhaar reveal.
 
 from math import ceil
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select, text
 
 from app.core.dependencies import CurrentUser, DbSession, RequireStaff, RequireSuperAdmin
@@ -23,6 +23,14 @@ from app.services.beneficiary_service import (
     SCHEME_REGISTRY,
     bulk_import_all_beneficiaries,
     get_beneficiary_or_404,
+)
+from app.services.bulk_template_service import (
+    XLSX_MEDIA_TYPE,
+    TemplateSheet,
+    build_multi_sheet_template,
+    columns_from_schema,
+    mandal_names,
+    xlsx_attachment_headers,
 )
 from app.services.encryption_service import decrypt_aadhaar, mask_aadhaar
 from app.services.excel_import_service import parse_excel_workbook
@@ -151,6 +159,30 @@ async def bulk_upload_all_beneficiaries(
     if result.errors:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=capped_error_detail(result.errors))
     return result
+
+
+@router.get(
+    "/bulk-upload/template",
+    summary="Download the all-schemes beneficiaries workbook template (.xlsx)",
+    description=(
+        "One tab per scheme, named by scheme_code, for POST /beneficiaries/bulk-upload. Tabs are "
+        "header-only (hover a header for its rule): fill the tabs you need and leave the rest "
+        "empty — empty tabs are skipped by the upload."
+    ),
+    response_class=Response,
+    responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
+)
+async def download_all_schemes_template(db: DbSession, current_user: RequireStaff) -> Response:
+    mandals = await mandal_names(db)
+    specs = [
+        TemplateSheet(title=code, columns=columns_from_schema(schema, mandals))
+        for code, (schema, _) in SCHEME_REGISTRY.items()
+    ]
+    return Response(
+        content=build_multi_sheet_template(specs),
+        media_type=XLSX_MEDIA_TYPE,
+        headers=xlsx_attachment_headers("beneficiaries_all_schemes_template.xlsx"),
+    )
 
 
 @router.get(
