@@ -22,7 +22,7 @@ class Scheme(Base):
     category: Mapped[str | None] = mapped_column(String(100))
     launch_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Beneficiary(Base):
@@ -56,5 +56,5 @@ class Beneficiary(Base):
     remarks: Mapped[str | None] = mapped_column(Text)
     scheme_details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

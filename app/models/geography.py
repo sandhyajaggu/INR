@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -11,7 +11,7 @@ class Mandal(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     villages: Mapped[list["Village"]] = relationship(back_populates="mandal")
 
@@ -23,7 +23,7 @@ class Village(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     mandal_id: Mapped[int] = mapped_column(ForeignKey("mandals.id", ondelete="RESTRICT"), nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     mandal: Mapped["Mandal"] = relationship(back_populates="villages")
 
@@ -47,7 +47,7 @@ class VillageAlias(Base):
     village_id: Mapped[int] = mapped_column(ForeignKey("villages.id", ondelete="CASCADE"), nullable=False)
     mandal_id: Mapped[int] = mapped_column(ForeignKey("mandals.id", ondelete="CASCADE"), nullable=False)
     alias: Mapped[str] = mapped_column(String(150), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     village: Mapped["Village"] = relationship()
 
@@ -71,4 +71,4 @@ class Booth(Base):
     congress_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     votes_polled: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     status: Mapped[str | None] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

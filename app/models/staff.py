@@ -20,5 +20,5 @@ class StaffUser(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     mobile: Mapped[str | None] = mapped_column(String(15))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

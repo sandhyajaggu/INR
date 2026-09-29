@@ -47,7 +47,7 @@ async def dashboard_summary(db: DbSession, current_user: CurrentUser) -> Dashboa
         await db.execute(
             text(
                 "SELECT id, action_type, module, reference_id, description, created_at "
-                "FROM activity_log ORDER BY created_at DESC LIMIT 10"
+                "FROM activity_log ORDER BY created_at DESC, id DESC LIMIT 10"
             )
         )
     ).all()

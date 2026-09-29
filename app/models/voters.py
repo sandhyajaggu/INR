@@ -31,5 +31,5 @@ class Voter(Base):
     voted_last_election: Mapped[bool | None] = mapped_column(Boolean)
     is_new_voter: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     photo_url: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
