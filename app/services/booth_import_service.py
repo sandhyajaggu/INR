@@ -22,6 +22,7 @@ from app.models.geography import Booth
 from app.schemas.booth_bulk import BOOTH_COLUMN_LABELS, BOOTH_SHEET_COLUMNS, BoothBulkRow
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.services.activity_service import log_activity
+from app.services.booth_service import _booth_rows_query, _ordered
 from app.services.excel_import_service import (
     MAX_ROWS_PER_SHEET,
     _load_workbook_from_upload,
@@ -213,7 +214,20 @@ async def bulk_import_booths(db: AsyncSession, rows: list[dict], actor_id: int) 
     return BulkImportResult(inserted=len(new_booths), updated=updated_count, errors=[])
 
 
-def build_booth_template() -> bytes:
+async def build_booth_template(db: AsyncSession) -> bytes:
+    """The upload template, pre-filled with every current booth.
+
+    Same 11 columns the upload accepts, so the file can be edited and
+    uploaded straight back (matching Mandal + Booth No rows update). Falls
+    back to example rows when there are no booths yet. A booth added
+    without an In-Charge or Status exports those cells blank; the upload
+    asks for them before it accepts the row.
+    """
+    booths = [
+        [b.booth_number, b.booth_officer_name, mandal, village, b.total_voters, b.votes_polled,
+         b.tdp_votes, b.ysp_votes, b.janasena_votes, b.congress_votes, b.status]
+        for b, mandal, village in (await db.execute(_ordered(_booth_rows_query()))).all()
+    ]
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Booths"
@@ -221,10 +235,10 @@ def build_booth_template() -> bytes:
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="0B1F3A")
-    for row in TEMPLATE_EXAMPLE_ROWS:
+    for row in booths or TEMPLATE_EXAMPLE_ROWS:
         sheet.append(row)
     # Text format on Booth No keeps leading zeros ("001") when users type new rows.
-    for r in range(2, 1001):
+    for r in range(2, sheet.max_row + 1000):
         sheet.cell(r, 1).number_format = "@"
     for col, width in zip("ABCDEFGHIJK", (10, 22, 18, 20, 17, 13, 8, 8, 10, 10, 10)):
         sheet.column_dimensions[col].width = width

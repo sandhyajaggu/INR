@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Response, UploadFile, status
 
 from app.core.dependencies import DbSession, RequireSuperAdmin
@@ -11,15 +13,16 @@ XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 @router.get(
     "/bulk-upload/template",
-    summary="Download the booths bulk-upload sample template (.xlsx)",
+    summary="Download the booths upload template (.xlsx), pre-filled with current booths",
     response_class=Response,
     responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
 )
-async def download_booth_template(current_user: RequireSuperAdmin) -> Response:
+async def download_booth_template(db: DbSession, current_user: RequireSuperAdmin) -> Response:
+    filename = f"booths_{date.today().isoformat()}.xlsx"
     return Response(
-        content=build_booth_template(),
+        content=await build_booth_template(db),
         media_type=XLSX_MEDIA_TYPE,
-        headers={"Content-Disposition": 'attachment; filename="booths_template.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
