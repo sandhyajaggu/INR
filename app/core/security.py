@@ -40,7 +40,7 @@ def create_access_token(staff_id: int, role: str) -> str:
 
 def create_refresh_token(staff_id: int, role: str) -> str:
     return _create_token(
-        str(staff_id), role, "refresh", timedelta(days=settings.refresh_token_expire_days)
+        str(staff_id), role, "refresh", timedelta(minutes=settings.refresh_token_expire_minutes)
     )
 
 

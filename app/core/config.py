@@ -18,8 +18,11 @@ class Settings(BaseSettings):
 
     # JWT
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 7
+    # Short-lived on purpose: the refresh token doubles as an idle timeout.
+    # Every refresh issues a new refresh token, so active users stay signed
+    # in; an app left idle (or a laptop asleep) longer than this is logged out.
+    access_token_expire_minutes: int = 5
+    refresh_token_expire_minutes: int = 15
     captcha_token_expire_minutes: int = 5
 
     # Database

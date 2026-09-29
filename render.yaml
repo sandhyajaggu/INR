@@ -24,9 +24,9 @@ services:
       - key: JWT_ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "30"
-      - key: REFRESH_TOKEN_EXPIRE_DAYS
-        value: "7"
+        value: "5"
+      - key: REFRESH_TOKEN_EXPIRE_MINUTES
+        value: "15"
       - key: CAPTCHA_TOKEN_EXPIRE_MINUTES
         value: "5"
       - key: DATABASE_URL
