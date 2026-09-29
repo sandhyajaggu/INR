@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -12,6 +12,7 @@ from app.services.encryption_service import encrypt_aadhaar
 from app.services.excel_import_service import parse_excel_rows
 from app.services.geography_service import resolve_geography
 from app.services.voter_service import bulk_import_voters, get_voter_or_404, search_voters, to_voter_out
+from app.services.voter_template_service import build_voter_template
 
 router = APIRouter(prefix="/voters", tags=["Voters"])
 
@@ -65,6 +66,27 @@ async def voter_summary_by_mandal(db: DbSession, current_user: CurrentUser) -> l
 async def voter_gender_distribution(db: DbSession, current_user: CurrentUser) -> list[GenderDistribution]:
     result = await db.execute(text("SELECT gender, total FROM v_voter_gender_distribution"))
     return [GenderDistribution(gender=row.gender, total=row.total) for row in result]
+
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@router.get(
+    "/bulk-upload/template",
+    summary="Download the voters bulk-upload template (.xlsx)",
+    description=(
+        "Blank template for POST /voters/bulk-upload: 13 columns (required ones in red), two "
+        "example rows, dropdowns for Gender / Mandal / Yes-No, and an Instructions sheet."
+    ),
+    response_class=Response,
+    responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
+)
+async def download_voter_template(db: DbSession, current_user: RequireStaff) -> Response:
+    return Response(
+        content=await build_voter_template(db),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": 'attachment; filename="voters_template.xlsx"'},
+    )
 
 
 @router.get("/{voter_id}", response_model=VoterOut, summary="Get one voter")
