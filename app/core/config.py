@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Public website (used to build shareable survey links)
     public_site_url: str = "https://mlainr.com"
 
+    # Shared secret the WhatsApp provider sends as X-Webhook-Token on inbound messages
+    whatsapp_webhook_token: str | None = None
+
     # CORS — comma-separated origins
     cors_origins: str = "http://localhost:3000"
 

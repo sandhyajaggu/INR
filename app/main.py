@@ -49,7 +49,7 @@ from app.api.routes import (
     schemes,
 )
 from app.api.routes import settings as settings_routes
-from app.api.routes import staff, surveys, surveys_v2, videos, voters
+from app.api.routes import communication, outreach, staff, surveys, surveys_v2, videos, voters
 from app.core.config import settings
 
 app = FastAPI(
@@ -118,6 +118,10 @@ app.include_router(surveys_v2.war_room_router)
 app.include_router(surveys.router)
 app.include_router(birthdays.router)
 app.include_router(media.router)
+
+# --- Communication -------------------------------------------------------
+for _router in (*communication.ROUTERS, *outreach.ROUTERS):
+    app.include_router(_router)
 app.include_router(events.router)
 app.include_router(notes_followups.router)
 app.include_router(local_leaders.router)

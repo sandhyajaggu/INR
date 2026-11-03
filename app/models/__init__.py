@@ -3,6 +3,16 @@
 from app.models.achievements import Achievement
 from app.models.activity_log import ActivityLog
 from app.models.cmrf import CmrfApplication
+from app.models.communication import (
+    AutoReply,
+    BroadcastList,
+    ChatMessage,
+    CommCampaign,
+    MessageTemplate,
+    SocialPost,
+    TeamMeeting,
+    VoterCall,
+)
 from app.models.contact import ContactMessage
 from app.models.development_works import DevelopmentWork
 from app.models.engagement import (
@@ -30,6 +40,14 @@ from app.models.surveys import Survey
 from app.models.voters import Voter
 
 __all__ = [
+    "AutoReply",
+    "BroadcastList",
+    "ChatMessage",
+    "CommCampaign",
+    "MessageTemplate",
+    "SocialPost",
+    "TeamMeeting",
+    "VoterCall",
     "BirthdayWish",
     "MediaAlbum",
     "MobileOtp",
