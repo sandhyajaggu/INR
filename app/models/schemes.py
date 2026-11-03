@@ -55,6 +55,6 @@ class Beneficiary(Base):
     video_url: Mapped[str | None] = mapped_column(Text)
     remarks: Mapped[str | None] = mapped_column(Text)
     scheme_details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,17 +1,26 @@
-from fastapi import APIRouter
+from typing import Any
+
+from fastapi import APIRouter, Request
 
 from app.core.dependencies import CurrentUser, DbSession
 from app.core.security import generate_captcha
 from app.schemas.auth import (
     CaptchaResponse,
-    CurrentUserResponse,
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
     RefreshRequest,
     TokenResponse,
 )
-from app.services.auth_service import authenticate, issue_password_reset_token, refresh_access_token
+from app.services.activity_service import client_ip
+from app.services.auth_service import (
+    authenticate,
+    change_password,
+    issue_password_reset_token,
+    refresh_access_token,
+)
+from app.services.user_service import serialize_session_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -22,9 +31,14 @@ async def get_captcha() -> CaptchaResponse:
     return CaptchaResponse(question=question, captcha_token=token)
 
 
-@router.post("/login", response_model=TokenResponse, summary="Log in as super_admin or admin")
-async def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
-    return await authenticate(db, payload)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Log in as super_admin, admin or staff",
+    description="Returns access/refresh tokens plus the `user` object (with its page `access` map).",
+)
+async def login(payload: LoginRequest, request: Request, db: DbSession) -> TokenResponse:
+    return await authenticate(db, payload, ip_address=client_ip(request))
 
 
 @router.post("/refresh", response_model=TokenResponse, summary="Exchange a refresh token for a new pair")
@@ -40,9 +54,21 @@ async def refresh(payload: RefreshRequest, db: DbSession) -> TokenResponse:
 )
 async def forgot_password(payload: ForgotPasswordRequest, db: DbSession) -> ForgotPasswordResponse:
     reset_token = await issue_password_reset_token(db, payload.email)
-    return ForgotPasswordResponse(detail="If that email exists, a reset token has been issued.", reset_token=reset_token)
+    message = f"Password reset instructions sent to {payload.email}"
+    return ForgotPasswordResponse(message=message, detail=message, reset_token=reset_token)
 
 
-@router.get("/me", response_model=CurrentUserResponse, summary="Get the current authenticated staff user")
-async def read_current_user(current_user: CurrentUser) -> CurrentUserResponse:
-    return CurrentUserResponse.model_validate(current_user)
+@router.post(
+    "/change-password",
+    summary="Change own password (clears the first-sign-in flag)",
+)
+async def change_own_password(
+    payload: ChangePasswordRequest, db: DbSession, current_user: CurrentUser
+) -> dict[str, Any]:
+    await change_password(db, current_user, payload.current_password, payload.new_password)
+    return {"success": True}
+
+
+@router.get("/me", summary="Get the current signed-in user (same shape as login's `user`)")
+async def read_current_user(current_user: CurrentUser) -> dict[str, Any]:
+    return serialize_session_user(current_user)

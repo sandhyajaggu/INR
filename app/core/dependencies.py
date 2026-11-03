@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access import has_access
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.staff import StaffUser
@@ -64,6 +65,30 @@ def require_roles(*roles: str):
         return current_user
 
     return _checker
+
+
+def require_page(page_key: str, minimum: str = "view"):
+    """Dependency factory: 403 unless the user's access map gives `minimum` (or more) on `page_key`.
+
+    Levels follow the frontend's access matrix: view < download < edit < admin.
+    Use "view" for reads, "download" for exports, "edit" for add/edit/upload/
+    status changes and "admin" for deletes. super_admin always passes.
+    """
+
+    async def _checker(current_user: CurrentUser) -> StaffUser:
+        if not has_access(current_user, page_key, minimum):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You do not have '{minimum}' access to {page_key.replace('_', ' ')}",
+            )
+        return current_user
+
+    return _checker
+
+
+def page_access(page_key: str, minimum: str = "view"):
+    """Annotated alias builder: `current_user: page_access("families", "edit")`."""
+    return Annotated[StaffUser, Depends(require_page(page_key, minimum))]
 
 
 # Any authenticated staff member (super_admin or admin)

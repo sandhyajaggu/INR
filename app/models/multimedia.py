@@ -22,7 +22,7 @@ class GalleryPhoto(Base):
     caption: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     date_added: Mapped[date] = mapped_column(Date, server_default=text("CURRENT_DATE"))
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))
 
 
 class Mp3Song(Base):

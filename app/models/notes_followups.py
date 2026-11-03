@@ -26,5 +26,5 @@ class NoteFollowup(Base):
     village_id: Mapped[int | None] = mapped_column(ForeignKey("villages.id"))
     mandal_id: Mapped[int | None] = mapped_column(ForeignKey("mandals.id"))
     notes_description: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

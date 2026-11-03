@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import (
     achievements,
+    audit_logs,
     auth,
     beneficiaries,
     beneficiaries_aadabidda_nidhi,
@@ -117,6 +118,7 @@ app.include_router(achievements.router)
 app.include_router(reports.router)
 app.include_router(dashboard.router)
 app.include_router(staff.router)
+app.include_router(audit_logs.router)
 app.include_router(settings_routes.router)
 
 

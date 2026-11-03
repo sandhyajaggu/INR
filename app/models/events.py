@@ -25,4 +25,4 @@ class Event(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="upcoming", server_default="upcoming")
     photo_url: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))

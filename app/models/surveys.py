@@ -26,4 +26,4 @@ class Survey(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default="pending")
     photo_url: Mapped[str | None] = mapped_column(Text)
     feedback_details: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))

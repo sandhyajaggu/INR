@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from typing import Any
 
-from app.schemas.common import ORMModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class CaptchaResponse(BaseModel):
@@ -9,7 +9,9 @@ class CaptchaResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    role: str = Field(..., pattern="^(super_admin|admin)$")
+    # Login.js offers super_admin / admin / staff. "staff" covers every other
+    # User Management role (Booth Agent, Mandal In-Charge, Custom, ...).
+    role: str = Field(..., pattern="^(super_admin|admin|staff)$")
     email: EmailStr
     password: str
     captcha_token: str
@@ -22,6 +24,10 @@ class TokenResponse(BaseModel):
     role: str
     access_token: str
     refresh_token: str
+    # Stored by Login.js as localStorage.currentUser: id, name, epic, role
+    # (super_admin/admin/staff), displayRole, email, mandal, village, scope,
+    # access (page map), photo, ...
+    user: dict[str, Any]
 
 
 class RefreshRequest(BaseModel):
@@ -33,14 +39,11 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ForgotPasswordResponse(BaseModel):
+    message: str
     detail: str
     reset_token: str
 
 
-class CurrentUserResponse(ORMModel):
-    id: int
-    name: str
-    email: str
-    role: str
-    mobile: str | None
-    status: str
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
