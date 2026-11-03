@@ -49,7 +49,7 @@ from app.api.routes import (
     schemes,
 )
 from app.api.routes import settings as settings_routes
-from app.api.routes import communication, outreach, staff, surveys, surveys_v2, videos, voters
+from app.api.routes import communication, insights, outreach, staff, surveys, surveys_v2, videos, voters
 from app.core.config import settings
 
 app = FastAPI(
@@ -138,6 +138,8 @@ app.include_router(achievements.router)
 # --- Analytics & admin -------------------------------------------------
 app.include_router(reports.router)
 app.include_router(dashboard.router)
+app.include_router(insights.dashboard_router)
+app.include_router(insights.reports_router)
 app.include_router(staff.router)
 app.include_router(audit_logs.router)
 app.include_router(settings_routes.router)

@@ -11,6 +11,7 @@ class Mandal(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    name_te: Mapped[str | None] = mapped_column(String(150))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     villages: Mapped[list["Village"]] = relationship(back_populates="mandal")
@@ -23,6 +24,7 @@ class Village(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     mandal_id: Mapped[int] = mapped_column(ForeignKey("mandals.id", ondelete="RESTRICT"), nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_te: Mapped[str | None] = mapped_column(String(150))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     mandal: Mapped["Mandal"] = relationship(back_populates="villages")

@@ -21,5 +21,7 @@ class AppSettings(Base):
     total_population: Mapped[int | None] = mapped_column(BigInteger)
     office_address: Mapped[str | None] = mapped_column(Text)
     contact_email: Mapped[str | None] = mapped_column(String(150))
-    contact_phone: Mapped[str | None] = mapped_column(String(15))
+    contact_phone: Mapped[str | None] = mapped_column(String(150))
     birthday_settings: Mapped[dict | None] = mapped_column(JSONB)
+    profile_te: Mapped[dict | None] = mapped_column(JSONB)
+    preferences: Mapped[dict | None] = mapped_column(JSONB)
