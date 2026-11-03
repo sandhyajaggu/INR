@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ORMModel, validate_mobile_number
 
@@ -18,90 +18,64 @@ class VillageOut(ORMModel):
     created_at: datetime
 
 
-BOOTH_STATUS_PATTERN = "^(On Time|Delayed)$"
-
-
 class BoothCreate(BaseModel):
-    booth_number: str = Field(min_length=1, max_length=20)
-    booth_name: str | None = None
-    village_name: str
-    mandal_name: str
-    location_address: str | None = None
-    total_voters: int = Field(default=0, ge=0)
-    votes_polled: int = Field(default=0, ge=0)
-    booth_officer_name: str | None = None
-    booth_officer_mobile: str | None = None
-    tdp_votes: int = Field(default=0, ge=0)
-    ysp_votes: int = Field(default=0, ge=0)
-    janasena_votes: int = Field(default=0, ge=0)
-    congress_votes: int = Field(default=0, ge=0)
-    status: str | None = Field(default=None, pattern=BOOTH_STATUS_PATTERN)
+    """Add/Edit Booth form (frontend: BoothModals.jsx BoothFormModal).
 
-    @field_validator("booth_number", "village_name", "mandal_name", mode="before")
+    booth_no, name (polling station), voters, mandal, village, agent_name and
+    agent_mobile are required, as in the form; the rest are optional.
+    """
+
+    booth_no: str = Field(min_length=1, max_length=20)
+    name: str = Field(min_length=1, max_length=150)
+    name_te: str | None = Field(default=None, max_length=200)
+    voters: int = Field(ge=0)
+    mandal: str
+    village: str
+    agent_name: str = Field(min_length=1, max_length=150)
+    agent_mobile: str
+    agent_alt_mobile: str | None = None
+    agent_photo: str | None = None
+    location_address: str | None = None
+
+    @field_validator("booth_no", mode="before")
+    @classmethod
+    def _booth_no(cls, v: object) -> object:
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            v = str(int(v))
+        return v.strip().lstrip("#").strip() if isinstance(v, str) else v
+
+    @field_validator("name", "name_te", "mandal", "village", "agent_name", "agent_photo", "location_address", mode="before")
     @classmethod
     def _strip(cls, v: object) -> object:
-        return v.strip() if isinstance(v, str) else v
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
 
-    @field_validator("booth_officer_mobile", mode="before")
+    @field_validator("agent_mobile", mode="before")
     @classmethod
-    def _validate_mobile(cls, v: object) -> str | None:
-        return validate_mobile_number(v)
+    def _agent_mobile(cls, v: object) -> str:
+        value = validate_mobile_number(v)
+        if value is None:
+            raise ValueError("agent_mobile is required")
+        return value
 
-    @model_validator(mode="after")
-    def _votes_within_registered(self) -> "BoothCreate":
-        if self.votes_polled > self.total_voters:
-            raise ValueError(
-                f"votes_polled ({self.votes_polled}) cannot be more than total_voters ({self.total_voters})"
-            )
-        party_total = self.tdp_votes + self.ysp_votes + self.janasena_votes + self.congress_votes
-        if party_total > self.total_voters:
-            raise ValueError(
-                f"TDP + YSP + Janasena + Congress votes ({party_total}) cannot be more than "
-                f"total_voters ({self.total_voters})"
-            )
-        return self
+    @field_validator("agent_alt_mobile", mode="before")
+    @classmethod
+    def _alt_mobile(cls, v: object) -> str | None:
+        return validate_mobile_number(v)
 
 
 class BoothUpdate(BoothCreate):
     pass
 
 
-class BoothOut(BaseModel):
-    """One Booth Summary table row. Mandal/village are returned by name only.
+class VoteToggleRequest(BaseModel):
+    """toggleVoterVote(boothId, voterId, party, agentName)."""
 
-    pending_votes, voting_percentage and turnout are calculated from
-    total_voters (Registered Votes) and votes_polled, not stored.
-    """
-
-    id: int
-    booth_number: str
-    booth_name: str | None
-    mandal_name: str
-    village_name: str
-    location_address: str | None
-    booth_officer_name: str | None
-    booth_officer_mobile: str | None
-    votes_polled: int
-    total_voters: int
-    pending_votes: int
-    voting_percentage: float
-    tdp_votes: int
-    ysp_votes: int
-    janasena_votes: int
-    congress_votes: int
-    turnout: float
-    status: str | None
-    created_at: datetime
-
-
-class BoothSummary(BaseModel):
-    total_booths: int
-    completed: int
-    completed_percentage: float
-    pending: int
-    pending_percentage: float
-    delayed: int
-    delayed_percentage: float
+    voter_id: int | str
+    party: str = Field(default="TDP", pattern="^(TDP|BJP|YSRCP|Janasena|Other)$")
+    agent_name: str | None = None
 
 
 class MandalNameOut(BaseModel):

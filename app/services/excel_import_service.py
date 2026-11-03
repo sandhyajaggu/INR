@@ -125,3 +125,99 @@ async def parse_excel_workbook(file: UploadFile) -> dict[str, list[dict[str, obj
         sheets[_normalize_sheet_name(sheet.title)] = rows
 
     return sheets
+
+
+# --- Any-format uploads (.xlsx / .xls / .csv) --------------------------------
+# The dashboard's upload dialogs accept ".xlsx, .xls, .csv" and their
+# downloadable templates are CSV files with display headers ("EPIC No",
+# "Full Name", ...). parse_upload_rows reads any of the three formats,
+# normalizes headers to snake_case and maps template headers onto the
+# schema's keys via `aliases`.
+
+
+def _blank_cell(value: object) -> object:
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return value
+
+
+def read_csv_table(contents: bytes) -> list[list[object]]:
+    import csv
+    import io
+
+    try:
+        text = contents.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        # Excel's "Save as CSV" on Windows writes the ANSI code page, not UTF-8.
+        text = contents.decode("cp1252", errors="replace")
+    return [[_blank_cell(v) for v in row] for row in csv.reader(io.StringIO(text))]
+
+
+def read_xlsx_table(contents: bytes) -> list[list[object]]:
+    sheet = _load_workbook_from_upload(contents).active
+    return [[_blank_cell(v) for v in row] for row in sheet.iter_rows(values_only=True)]
+
+
+def read_xls_table(contents: bytes) -> list[list[object]]:
+    import xlrd
+
+    try:
+        book = xlrd.open_workbook(file_contents=contents)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Could not read the Excel file") from exc
+    sheet = book.sheet_by_index(0)
+    table = []
+    for r in range(sheet.nrows):
+        row = []
+        for value in sheet.row_values(r):
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            row.append(_blank_cell(value))
+        table.append(row)
+    return table
+
+
+async def parse_upload_rows(
+    file: UploadFile,
+    required_columns: set[str],
+    aliases: dict[str, str] | None = None,
+) -> list[dict[str, object]]:
+    """Rows from an .xlsx / .xls / .csv upload, keyed by normalized (and aliased) header."""
+    name = (file.filename or "").lower()
+    contents = await file.read()
+    if name.endswith((".xlsx", ".xlsm")):
+        table = read_xlsx_table(contents)
+    elif name.endswith(".xls"):
+        table = read_xls_table(contents)
+    elif name.endswith(".csv"):
+        table = read_csv_table(contents)
+    else:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only .xlsx, .xls and .csv files are supported")
+    if not table:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The sheet is empty")
+    header_row, *data_rows = table
+    aliases = aliases or {}
+    headers = []
+    for h in header_row:
+        if h is None:
+            headers.append(f"_blank_{len(headers)}")
+            continue
+        key = _normalize_header(h)
+        headers.append(aliases.get(key, key))
+    missing = required_columns - set(headers)
+    if missing:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Missing required column(s): {', '.join(sorted(missing))}",
+        )
+    rows = _rows_from_iter(iter(data_rows), headers)
+    if not rows:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The sheet has no data rows below the header")
+    if len(rows) > MAX_ROWS_PER_SHEET:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Sheet has {len(rows)} rows, which exceeds the {MAX_ROWS_PER_SHEET:,}-row limit per "
+            "upload. Split it into smaller files and upload each one separately.",
+        )
+    return rows

@@ -1,241 +1,317 @@
-"""Booth Summary page (Super Admin → Booths → All Booths).
+"""Booths page and Polling Day (frontend: Booths.jsx, BoothDetails.jsx, BoothModals.jsx,
+PollingDay.jsx, PolingDayDetails.jsx).
 
-Every booth is returned with its mandal/village *names* (not IDs), plus the
-turnout figures the table shows, calculated from Registered Votes
-(total_voters) and votes_polled.
+Booth record shape (Booths page):
+    id, booth_no, name, name_te, mandal, village, voters, agent_name,
+    agent_initial, agent_mobile, agent_alt_mobile, agent_photo, last_login
+    ("Never" or "30 Oct, 10:50 am"), days_since_login ("Never" or a number),
+    status ("Not logged in" / "Active" / "Inactive"), mapped_pct,
+    mobile_verified_pct, surveyed_pct, createdAt, updatedAt
+Detail adds voter_list (frontend voter shape).
 
-Summary-card status buckets:
-    Completed = status "On Time"
-    Delayed   = status "Delayed"
-    Pending   = no status yet (booth added but not updated)
+Polling Day record shape:
+    id, booth_no, name, name_te, mandal, village, agent_name, voters,
+    votes_polled, party_mix ("TDP 60% · YSRCP 30%" or "—"), leading
 """
 
 import csv
 import io
-from math import ceil
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.scope import UserScope
+from app.models.families import FamilyMember
 from app.models.geography import Booth, Mandal, Village
-from app.schemas.common import PaginatedResponse
-from app.schemas.geography import BoothCreate, BoothOut, BoothSummary
+from app.models.staff import StaffUser
+from app.models.voters import Voter
+from app.schemas.geography import BoothCreate
 from app.services.geography_service import resolve_geography
+from app.services.survey_service import surveyed_counts_by_booth
+from app.services.voter_profile import format_marked_at, voter_rows
 
-STATUS_COMPLETED = "On Time"
-STATUS_DELAYED = "Delayed"
-STATUS_PENDING = "Pending"  # filter value only; stored as NULL
-
-EXPORT_COLUMNS = [
-    "Booth No", "In-Charge Name", "Mandal", "Village", "Votes Polled", "Registered Votes",
-    "Pending Votes", "Voting %", "TDP", "YSP", "Janasena", "Congress", "Turnout", "Status",
-]
+ACTIVE_AGENT_DAYS = 7
 
 
-def _percentage(part: int, whole: int) -> float:
-    return round(part * 100 / whole, 1) if whole else 0.0
+def _initials(name: str | None) -> str:
+    parts = [p for p in (name or "").split() if p]
+    if not parts:
+        return "A"
+    return "".join(p[0] for p in parts[:2]).upper()
 
 
-def to_booth_out(booth: Booth, mandal_name: str, village_name: str) -> BoothOut:
-    registered = booth.total_voters or 0
-    polled = booth.votes_polled or 0
-    turnout = _percentage(polled, registered)
-    return BoothOut(
-        id=booth.id,
-        booth_number=booth.booth_number,
-        booth_name=booth.booth_name,
-        mandal_name=mandal_name,
-        village_name=village_name,
-        location_address=booth.location_address,
-        booth_officer_name=booth.booth_officer_name,
-        booth_officer_mobile=booth.booth_officer_mobile,
-        votes_polled=polled,
-        total_voters=registered,
-        pending_votes=max(registered - polled, 0),
-        voting_percentage=turnout,
-        tdp_votes=booth.tdp_votes,
-        ysp_votes=booth.ysp_votes,
-        janasena_votes=booth.janasena_votes,
-        congress_votes=booth.congress_votes,
-        turnout=turnout,
-        status=booth.status,
-        created_at=booth.created_at,
-    )
+def _pct(part: int, whole: int) -> int | None:
+    return round(part * 100 / whole) if whole else None
 
 
-def _apply_filters(
-    stmt: Select,
-    *,
-    mandal_name: str | None,
-    village_name: str | None,
-    q: str | None,
-    status_filter: str | None,
-) -> Select:
-    if mandal_name and mandal_name.strip():
-        stmt = stmt.where(func.lower(Mandal.name) == mandal_name.strip().lower())
-    if village_name and village_name.strip():
-        stmt = stmt.where(func.lower(Village.name) == village_name.strip().lower())
-    if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        stmt = stmt.where(or_(Booth.booth_number.ilike(pattern), Booth.booth_officer_name.ilike(pattern)))
-    if status_filter:
-        if status_filter == STATUS_PENDING:
-            stmt = stmt.where(Booth.status.is_(None))
-        else:
-            stmt = stmt.where(Booth.status == status_filter)
-    return stmt
-
-
-def _booth_rows_query() -> Select:
-    return (
+def _booths_query(scope: UserScope):
+    stmt = (
         select(Booth, Mandal.name, Village.name)
-        .join(Mandal, Booth.mandal_id == Mandal.id)
-        .join(Village, Booth.village_id == Village.id)
+        .join(Mandal, Mandal.id == Booth.mandal_id)
+        .join(Village, Village.id == Booth.village_id)
     )
+    return scope.apply(stmt, mandal_col=Booth.mandal_id, booth_col=Booth.id)
 
 
-def _ordered(stmt: Select) -> Select:
-    # Booth numbers are text ("001", "12", "293"); ordering by length first
-    # keeps them in numeric order without breaking on non-numeric numbers.
-    return stmt.order_by(Mandal.name, func.length(Booth.booth_number), Booth.booth_number)
-
-
-async def list_booths(
-    db: AsyncSession,
-    *,
-    mandal_name: str | None,
-    village_name: str | None,
-    q: str | None,
-    status_filter: str | None,
-    page: int,
-    page_size: int,
-) -> PaginatedResponse[BoothOut]:
-    filters = dict(mandal_name=mandal_name, village_name=village_name, q=q, status_filter=status_filter)
-    count_stmt = _apply_filters(
-        select(func.count(Booth.id))
-        .join(Mandal, Booth.mandal_id == Mandal.id)
-        .join(Village, Booth.village_id == Village.id),
-        **filters,
-    )
-    total = (await db.execute(count_stmt)).scalar_one()
-    stmt = _ordered(_apply_filters(_booth_rows_query(), **filters)).offset((page - 1) * page_size).limit(page_size)
-    rows = (await db.execute(stmt)).all()
-    return PaginatedResponse(
-        items=[to_booth_out(b, m, v) for b, m, v in rows],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=ceil(total / page_size) if page_size else 0,
-    )
-
-
-async def booth_summary(
-    db: AsyncSession, *, mandal_name: str | None, village_name: str | None, q: str | None
-) -> BoothSummary:
-    stmt = _apply_filters(
+async def _voter_counts(db: AsyncSession, booth_ids: list[int]) -> dict[int, dict[str, int]]:
+    """Per booth: voters, mapped to a family, mobile verified, voted, votes per party."""
+    if not booth_ids:
+        return {}
+    mapped = select(FamilyMember.voter_id)
+    stmt = (
         select(
-            func.count(Booth.id),
-            func.count(Booth.id).filter(Booth.status == STATUS_COMPLETED),
-            func.count(Booth.id).filter(Booth.status == STATUS_DELAYED),
-            func.count(Booth.id).filter(Booth.status.is_(None)),
+            Voter.booth_id,
+            func.count(),
+            func.count().filter(Voter.id.in_(mapped)),
+            func.count().filter(Voter.mobile_verified.is_(True), Voter.mobile.is_not(None)),
+            func.count().filter(Voter.polling_status == "voted"),
         )
-        .join(Mandal, Booth.mandal_id == Mandal.id)
-        .join(Village, Booth.village_id == Village.id),
-        mandal_name=mandal_name,
-        village_name=village_name,
-        q=q,
-        status_filter=None,
+        .where(Voter.booth_id.in_(booth_ids), Voter.removed_at.is_(None))
+        .group_by(Voter.booth_id)
     )
-    total, completed, delayed, pending = (await db.execute(stmt)).one()
-    return BoothSummary(
-        total_booths=total,
-        completed=completed,
-        completed_percentage=_percentage(completed, total),
-        pending=pending,
-        pending_percentage=_percentage(pending, total),
-        delayed=delayed,
-        delayed_percentage=_percentage(delayed, total),
+    counts = {
+        row[0]: {"voters": row[1], "mapped": row[2], "verified": row[3], "voted": row[4], "parties": {}}
+        for row in (await db.execute(stmt)).all()
+    }
+    party_stmt = (
+        select(Voter.booth_id, Voter.voted_party, func.count())
+        .where(Voter.booth_id.in_(booth_ids), Voter.removed_at.is_(None), Voter.polling_status == "voted")
+        .group_by(Voter.booth_id, Voter.voted_party)
     )
+    for booth_id, party, n in (await db.execute(party_stmt)).all():
+        counts.setdefault(booth_id, {"voters": 0, "mapped": 0, "verified": 0, "voted": 0, "parties": {}})
+        counts[booth_id]["parties"][party or "Not recorded"] = n
+    return counts
 
 
-async def export_booths_csv(
+async def _agent_logins(db: AsyncSession, mobiles: list[str]) -> dict[str, datetime | None]:
+    mobiles = [m for m in mobiles if m]
+    if not mobiles:
+        return {}
+    stmt = select(StaffUser.mobile, StaffUser.last_login_at).where(StaffUser.mobile.in_(mobiles))
+    return {mobile: last for mobile, last in (await db.execute(stmt)).all()}
+
+
+def _login_fields(last_login: datetime | None) -> dict[str, Any]:
+    if last_login is None:
+        return {"last_login": "Never", "days_since_login": "Never", "status": "Not logged in"}
+    days = (datetime.now(timezone.utc) - last_login).days
+    return {
+        "last_login": format_marked_at(last_login),
+        "days_since_login": days,
+        "status": "Active" if days <= ACTIVE_AGENT_DAYS else "Inactive",
+    }
+
+
+def _party_mix(parties: dict[str, int], voted: int) -> tuple[str, str]:
+    if not voted:
+        return "—", "—"
+    ranked = sorted(parties.items(), key=lambda kv: kv[1], reverse=True)
+    mix = " · ".join(f"{p} {round(n * 100 / voted)}%" for p, n in ranked)
+    leading = ranked[0][0] if ranked and ranked[0][0] != "Not recorded" else "—"
+    return mix, leading
+
+
+async def booth_rows(db: AsyncSession, rows: list[tuple[Booth, str, str]]) -> list[dict[str, Any]]:
+    booth_ids = [b.id for b, _, _ in rows]
+    counts = await _voter_counts(db, booth_ids)
+    surveyed = await surveyed_counts_by_booth(db, booth_ids)
+    logins = await _agent_logins(db, [b.booth_officer_mobile for b, _, _ in rows])
+    out = []
+    for booth, mandal, village in rows:
+        c = counts.get(booth.id, {"voters": 0, "mapped": 0, "verified": 0, "voted": 0, "parties": {}})
+        actual = c["voters"]
+        out.append(
+            {
+                "id": str(booth.id),
+                "booth_no": booth.booth_number,
+                "name": booth.booth_name,
+                "name_te": booth.booth_name_te,
+                "mandal": mandal,
+                "village": village,
+                "voters": booth.total_voters or actual,
+                "voters_in_roll": actual,
+                "agent_name": booth.booth_officer_name,
+                "agent_initial": _initials(booth.booth_officer_name),
+                "agent_mobile": booth.booth_officer_mobile,
+                "agent_alt_mobile": booth.agent_alt_mobile,
+                "agent_photo": booth.agent_photo,
+                **_login_fields(logins.get(booth.booth_officer_mobile)),
+                "mapped_pct": _pct(c["mapped"], actual),
+                "mobile_verified_pct": _pct(c["verified"], actual),
+                "surveyed_pct": _pct(surveyed.get(booth.id, 0), actual),
+                "votes_polled": c["voted"],
+                "location_address": booth.location_address,
+                "mandal_id": booth.mandal_id,
+                "village_id": booth.village_id,
+                "createdAt": booth.created_at,
+                "updatedAt": booth.updated_at,
+            }
+        )
+    return out
+
+
+async def polling_rows(db: AsyncSession, rows: list[tuple[Booth, str, str]]) -> list[dict[str, Any]]:
+    counts = await _voter_counts(db, [b.id for b, _, _ in rows])
+    out = []
+    for booth, mandal, village in rows:
+        c = counts.get(booth.id, {"voters": 0, "voted": 0, "parties": {}})
+        party_mix, leading = _party_mix(c["parties"], c["voted"])
+        out.append(
+            {
+                "id": str(booth.id),
+                "booth_no": booth.booth_number,
+                "name": booth.booth_name,
+                "name_te": booth.booth_name_te,
+                "mandal": mandal,
+                "village": village,
+                "agent_name": booth.booth_officer_name,
+                "voters": c["voters"],
+                "votes_polled": c["voted"],
+                "party_mix": party_mix,
+                "leading": leading,
+                "party_counts": {k: v for k, v in c["parties"].items()},
+            }
+        )
+    return out
+
+
+async def list_booth_rows(
     db: AsyncSession,
+    scope: UserScope,
     *,
-    mandal_name: str | None,
-    village_name: str | None,
-    q: str | None,
-    status_filter: str | None,
-) -> str:
-    stmt = _ordered(
-        _apply_filters(
-            _booth_rows_query(), mandal_name=mandal_name, village_name=village_name, q=q, status_filter=status_filter
+    q: str | None = None,
+    mandal: str | None = None,
+    village: str | None = None,
+) -> list[tuple[Booth, str, str]]:
+    stmt = _booths_query(scope)
+    if mandal:
+        stmt = stmt.where(func.lower(Mandal.name) == mandal.strip().lower())
+    if village:
+        stmt = stmt.where(func.lower(Village.name) == village.strip().lower())
+    if q and q.strip():
+        term = f"%{q.strip().lstrip('#')}%"
+        stmt = stmt.where(
+            or_(
+                Booth.booth_number.ilike(term),
+                Booth.booth_name.ilike(term),
+                Booth.booth_officer_name.ilike(term),
+                Mandal.name.ilike(term),
+                Village.name.ilike(term),
+            )
         )
-    )
+    stmt = stmt.order_by(Mandal.name, func.length(Booth.booth_number), Booth.booth_number)
+    return list((await db.execute(stmt)).all())
+
+
+async def get_booth_row(db: AsyncSession, booth_id: str, scope: UserScope | None = None) -> tuple[Booth, str, str]:
+    key = str(booth_id).strip()
+    if not key.isdigit():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booth not found")
+    stmt = _booths_query(scope or UserScope()).where(Booth.id == int(key))
+    row = (await db.execute(stmt)).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booth not found")
+    return tuple(row)
+
+
+async def booth_voter_list(db: AsyncSession, booth_id: int) -> list[dict[str, Any]]:
+    stmt = select(Voter).where(Voter.booth_id == booth_id, Voter.removed_at.is_(None)).order_by(Voter.id)
+    return await voter_rows(db, list((await db.execute(stmt)).scalars().all()))
+
+
+async def _booth_values(db: AsyncSession, payload: BoothCreate, exclude_id: int | None) -> dict[str, Any]:
+    data = payload.model_dump()
+    mandal_id, village_id = await resolve_geography(db, mandal_name=data["mandal"], village_name=data["village"])
+    duplicate = select(Booth.id).where(Booth.mandal_id == mandal_id, Booth.booth_number == data["booth_no"])
+    if exclude_id is not None:
+        duplicate = duplicate.where(Booth.id != exclude_id)
+    if (await db.execute(duplicate)).first() is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Booth No '{data['booth_no']}' already exists in this mandal")
+    return {
+        "booth_number": data["booth_no"],
+        "booth_name": data["name"],
+        "booth_name_te": data.get("name_te"),
+        "total_voters": data["voters"],
+        "mandal_id": mandal_id,
+        "village_id": village_id,
+        "booth_officer_name": data["agent_name"],
+        "booth_officer_mobile": data["agent_mobile"],
+        "agent_alt_mobile": data.get("agent_alt_mobile"),
+        "agent_photo": data.get("agent_photo"),
+        "location_address": data.get("location_address"),
+    }
+
+
+async def create_booth(db: AsyncSession, payload: BoothCreate) -> Booth:
+    booth = Booth(**await _booth_values(db, payload, exclude_id=None))
+    db.add(booth)
+    await db.flush()
+    return booth
+
+
+async def update_booth(db: AsyncSession, booth: Booth, payload: BoothCreate) -> None:
+    for field, value in (await _booth_values(db, payload, exclude_id=booth.id)).items():
+        setattr(booth, field, value)
+    await db.flush()
+
+
+async def delete_booth(db: AsyncSession, booth: Booth) -> None:
+    in_use = (
+        await db.execute(select(func.count()).select_from(Voter).where(Voter.booth_id == booth.id))
+    ).scalar_one()
+    if in_use:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This booth has {in_use} voters assigned to it. Move those voters to another booth first.",
+        )
+    await db.delete(booth)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This booth is still referenced by other records") from exc
+
+
+EXPORT_COLUMNS = ["Booth No", "Polling Station", "Mandal", "Village", "Voters", "Agent Name", "Agent Mobile",
+                  "Last Login", "Status", "Mapped %", "Mobile verified %", "Surveyed %"]
+
+
+def export_csv(rows: list[dict[str, Any]]) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(EXPORT_COLUMNS)
-    for booth, mandal, village in (await db.execute(stmt)).all():
-        row = to_booth_out(booth, mandal, village)
+    for b in rows:
         writer.writerow([
-            row.booth_number, row.booth_officer_name or "", row.mandal_name, row.village_name,
-            row.votes_polled, row.total_voters, row.pending_votes, f"{row.voting_percentage}%",
-            row.tdp_votes, row.ysp_votes, row.janasena_votes, row.congress_votes,
-            f"{row.turnout}%", row.status or STATUS_PENDING,
+            b["booth_no"], b["name"] or "", b["mandal"], b["village"], b["voters"], b["agent_name"] or "",
+            b["agent_mobile"] or "", b["last_login"], b["status"],
+            "" if b["mapped_pct"] is None else b["mapped_pct"],
+            "" if b["mobile_verified_pct"] is None else b["mobile_verified_pct"],
+            "" if b["surveyed_pct"] is None else b["surveyed_pct"],
         ])
     # BOM so Excel opens the file as UTF-8 (Telugu names, etc.).
     return "﻿" + buffer.getvalue()
 
 
-async def get_booth_out(db: AsyncSession, booth_id: int) -> BoothOut:
-    row = (await db.execute(_booth_rows_query().where(Booth.id == booth_id))).first()
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booth not found")
-    return to_booth_out(*row)
+def booth_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Booths page cards."""
+    total_voters = sum(r["voters_in_roll"] for r in rows)
 
+    def weighted(key: str) -> int:
+        if not total_voters:
+            return 0
+        return round(sum((r[key] or 0) * r["voters_in_roll"] for r in rows) / total_voters)
 
-async def _booth_values(db: AsyncSession, payload: BoothCreate, exclude_id: int | None) -> dict:
-    data = payload.model_dump()
-    mandal_id, village_id = await resolve_geography(
-        db, mandal_name=data.pop("mandal_name"), village_name=data.pop("village_name")
-    )
-    duplicate = select(Booth.id).where(Booth.mandal_id == mandal_id, Booth.booth_number == data["booth_number"])
-    if exclude_id is not None:
-        duplicate = duplicate.where(Booth.id != exclude_id)
-    if (await db.execute(duplicate)).first() is not None:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Booth No '{data['booth_number']}' already exists in this mandal"
-        )
-    return {**data, "mandal_id": mandal_id, "village_id": village_id}
-
-
-async def create_booth(db: AsyncSession, payload: BoothCreate) -> BoothOut:
-    booth = Booth(**await _booth_values(db, payload, exclude_id=None))
-    db.add(booth)
-    await db.commit()
-    return await get_booth_out(db, booth.id)
-
-
-async def update_booth(db: AsyncSession, booth_id: int, payload: BoothCreate) -> BoothOut:
-    booth = await db.get(Booth, booth_id)
-    if booth is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booth not found")
-    for field, value in (await _booth_values(db, payload, exclude_id=booth_id)).items():
-        setattr(booth, field, value)
-    await db.commit()
-    return await get_booth_out(db, booth_id)
-
-
-async def delete_booth(db: AsyncSession, booth_id: int) -> None:
-    booth = await db.get(Booth, booth_id)
-    if booth is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Booth not found")
-    await db.delete(booth)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "This booth has voters assigned to it. Move those voters to another booth first."
-        ) from None
+    return {
+        "totalBooths": len(rows),
+        "activeAgents": sum(1 for r in rows if r["last_login"] != "Never"),
+        "notLoggedInAgents": sum(1 for r in rows if r["last_login"] == "Never"),
+        "distinctMandals": len({r["mandal"] for r in rows}),
+        "totalVoters": sum(int(r["voters"] or 0) for r in rows),
+        "mappedPct": weighted("mapped_pct"),
+        "mobileVerifiedPct": weighted("mobile_verified_pct"),
+        "surveyedPct": weighted("surveyed_pct"),
+    }

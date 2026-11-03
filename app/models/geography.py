@@ -71,4 +71,9 @@ class Booth(Base):
     congress_votes: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     votes_polled: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     status: Mapped[str | None] = mapped_column(String(20))
+    # Booths page: Telugu polling-station name and booth agent details
+    booth_name_te: Mapped[str | None] = mapped_column(String(200))
+    agent_alt_mobile: Mapped[str | None] = mapped_column(String(15))
+    agent_photo: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

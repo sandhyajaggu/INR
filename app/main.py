@@ -29,6 +29,7 @@ from app.api.routes import (
     dashboard,
     development_works,
     events,
+    families,
     geography,
     files,
     gallery,
@@ -36,6 +37,7 @@ from app.api.routes import (
     local_leaders,
     mp3,
     notes_followups,
+    polling_day,
     press,
     public,
     reports,
@@ -79,6 +81,8 @@ app.include_router(geography.router)
 app.include_router(voters.router)
 app.include_router(booths_bulk.router)
 app.include_router(booths.router)
+app.include_router(polling_day.router)
+app.include_router(families.router)
 app.include_router(development_works.extra_router)
 app.include_router(development_works.router)
 app.include_router(schemes.router)

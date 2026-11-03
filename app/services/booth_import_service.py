@@ -1,127 +1,45 @@
-"""Booths bulk upload: sheet parsing (.xlsx / .xls / .csv), validation, upsert.
+"""Booths bulk upload (.xlsx / .xls / .csv): validation and upsert.
 
 All-or-nothing like the voters import: every row is validated first
-(required fields, numbers, status, resolvable mandal/village, no duplicate
-booth within the file). If any row fails, nothing is written. Otherwise a
-row whose (mandal, booth number) already exists updates that booth, and
-every other row adds a new booth.
+(required fields, numbers, mobile format, resolvable mandal/village, no
+duplicate booth within the file). If any row fails, nothing is written.
+Otherwise a row whose (mandal, booth number) already exists updates that
+booth, and every other row adds a new booth.
 """
 
-import csv
-import io
-
-import xlrd
-from fastapi import HTTPException, UploadFile, status
+from fastapi import UploadFile
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.geography import Booth
-from app.schemas.booth_bulk import BOOTH_COLUMN_LABELS, BOOTH_SHEET_COLUMNS, BoothBulkRow
+from app.models.geography import Booth, Mandal, Village
+from app.schemas.booth_bulk import BOOTH_COLUMN_LABELS, BOOTH_HEADER_ALIASES, BoothBulkRow
 from app.schemas.bulk_import import BulkImportResult, BulkImportRowError
 from app.services.activity_service import log_activity
-from app.services.booth_service import _booth_rows_query, _ordered
 from app.services.bulk_template_service import (
     TemplateColumn,
     TemplateSheet,
     build_single_sheet_template,
     mandal_names,
 )
-from app.services.excel_import_service import (
-    MAX_ROWS_PER_SHEET,
-    _load_workbook_from_upload,
-    _normalize_header,
-    _rows_from_iter,
-)
+from app.services.excel_import_service import parse_upload_rows
 from app.services.geography_service import load_geography_maps
 
 TEMPLATE_EXAMPLE_ROWS = [
-    ["001", "Ravi Kumar", "Kandukur", "Palur", 1000, 420, 210, 150, 30, 30, "On Time"],
-    ["002", "Suresh Babu", "Kandukur", "Ogur", 950, 380, 160, 180, 10, 30, "Delayed"],
+    ["256", "ZPH School Daida", 1050, "Kandukur", "Kandukur (Rural)", "Ramesh Kumar", "9876543210", "9123456780"],
 ]
 
-
-def _unprocessable(message: str) -> HTTPException:
-    return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, message)
-
-
-def _blank_to_none(value: object) -> object:
-    if isinstance(value, str):
-        value = value.strip()
-        return value or None
-    return value
-
-
-def _check_required_columns(headers: set[str]) -> None:
-    missing = [label for label, key in BOOTH_SHEET_COLUMNS.items() if key not in headers]
-    if missing:
-        raise _unprocessable(f"Missing required column(s): {', '.join(missing)}")
-
-
-def _rows_from_table(table: list[list[object]]) -> list[dict[str, object]]:
-    """Header check + row dicts (same shape as parse_excel_rows) for every upload format."""
-    if not table:
-        raise _unprocessable("The sheet is empty")
-    header_row, *data_rows = table
-    headers = [_normalize_header(h) for h in header_row if h is not None]
-    _check_required_columns(set(headers))
-    rows = _rows_from_iter(iter(data_rows), headers)
-    if not rows:
-        raise _unprocessable("The sheet has no booth rows below the header")
-    if len(rows) > MAX_ROWS_PER_SHEET:
-        raise _unprocessable(
-            f"Sheet has {len(rows)} rows, which exceeds the {MAX_ROWS_PER_SHEET:,}-row limit per "
-            "upload. Split it into smaller files and upload each one separately."
-        )
-    return rows
-
-
-def _read_csv(contents: bytes) -> list[list[object]]:
-    try:
-        text = contents.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        # Excel's "Save as CSV" on Windows writes the ANSI code page, not UTF-8.
-        text = contents.decode("cp1252", errors="replace")
-    return [[_blank_to_none(v) for v in row] for row in csv.reader(io.StringIO(text))]
-
-
-def _read_xlsx(contents: bytes) -> list[list[object]]:
-    sheet = _load_workbook_from_upload(contents).active
-    return [[_blank_to_none(v) for v in row] for row in sheet.iter_rows(values_only=True)]
-
-
-def _read_xls(contents: bytes) -> list[list[object]]:
-    try:
-        book = xlrd.open_workbook(file_contents=contents)
-    except Exception as exc:
-        raise _unprocessable("Could not read the Excel file") from exc
-    sheet = book.sheet_by_index(0)
-    table = []
-    for r in range(sheet.nrows):
-        row = []
-        for value in sheet.row_values(r):
-            if isinstance(value, float) and value.is_integer():
-                value = int(value)
-            row.append(_blank_to_none(value))
-        table.append(row)
-    return table
+REQUIRED_KEYS = {"booth_no", "name", "voters", "mandal", "village", "agent_name", "agent_mobile"}
 
 
 async def parse_booth_upload(file: UploadFile) -> list[dict[str, object]]:
-    name = (file.filename or "").lower()
-    if name.endswith((".xlsx", ".xlsm")):
-        return _rows_from_table(_read_xlsx(await file.read()))
-    if name.endswith(".xls"):
-        return _rows_from_table(_read_xls(await file.read()))
-    if name.endswith(".csv"):
-        return _rows_from_table(_read_csv(await file.read()))
-    raise _unprocessable("Only .xlsx, .xls and .csv files are supported")
+    return await parse_upload_rows(file, required_columns=REQUIRED_KEYS, aliases=BOOTH_HEADER_ALIASES)
 
 
 def _format_validation_error(exc: ValidationError) -> str:
     messages = []
     for err in exc.errors():
-        label = BOOTH_COLUMN_LABELS.get(str(err["loc"][0]), "") if err["loc"] else ""
+        label = BOOTH_COLUMN_LABELS.get(str(err["loc"][0]), str(err["loc"][0])) if err["loc"] else ""
         msg = err["msg"].removeprefix("Value error, ")
         if err["type"] == "missing":
             msg = "is required"
@@ -177,8 +95,7 @@ async def bulk_import_booths(db: AsyncSession, rows: list[dict], actor_id: int) 
         errors.sort(key=lambda e: e.row)
         return BulkImportResult(inserted=0, errors=errors)
 
-    # The booths table is small (a few hundred rows per constituency), so one
-    # query for all of them beats a lookup per sheet row.
+    # The booths table is small (a few hundred rows per constituency).
     existing = {
         (b.mandal_id, b.booth_number.strip()): b for b in (await db.execute(select(Booth))).scalars().all()
     }
@@ -187,14 +104,11 @@ async def bulk_import_booths(db: AsyncSession, rows: list[dict], actor_id: int) 
     for parsed, mandal_id, village_id in resolved:
         values = {
             "village_id": village_id,
-            "booth_officer_name": parsed.in_charge,
-            "total_voters": parsed.registered_votes,
-            "votes_polled": parsed.votes_polled,
-            "tdp_votes": parsed.tdp,
-            "ysp_votes": parsed.ysp,
-            "janasena_votes": parsed.janasena,
-            "congress_votes": parsed.congress,
-            "status": parsed.status,
+            "booth_name": parsed.name,
+            "total_voters": parsed.voters,
+            "booth_officer_name": parsed.agent_name,
+            "booth_officer_mobile": parsed.agent_mobile,
+            "agent_alt_mobile": parsed.agent_alt_mobile,
         }
         booth = existing.get((mandal_id, parsed.booth_no))
         if booth is not None:
@@ -219,22 +133,21 @@ async def bulk_import_booths(db: AsyncSession, rows: list[dict], actor_id: int) 
 
 
 async def build_booth_template(db: AsyncSession) -> bytes:
-    """The upload template, pre-filled with every current booth.
-
-    Same 11 columns the upload accepts, so the file can be edited and
-    uploaded straight back (matching Mandal + Booth No rows update). Falls
-    back to example rows when there are no booths yet. A booth added
-    without an In-Charge or Status exports those cells blank; the upload
-    asks for them before it accepts the row.
-    """
+    """The upload template, pre-filled with every current booth (edit and upload back)."""
+    stmt = (
+        select(Booth, Mandal.name, Village.name)
+        .join(Mandal, Mandal.id == Booth.mandal_id)
+        .join(Village, Village.id == Booth.village_id)
+        .order_by(Mandal.name, Booth.booth_number)
+    )
     booths = [
-        [b.booth_number, b.booth_officer_name, mandal, village, b.total_voters, b.votes_polled,
-         b.tdp_votes, b.ysp_votes, b.janasena_votes, b.congress_votes, b.status]
-        for b, mandal, village in (await db.execute(_ordered(_booth_rows_query()))).all()
+        [b.booth_number, b.booth_name, b.total_voters, mandal, village, b.booth_officer_name,
+         b.booth_officer_mobile, b.agent_alt_mobile]
+        for b, mandal, village in (await db.execute(stmt)).all()
     ]
     spec = TemplateSheet("Booths", booth_template_columns(await mandal_names(db)), booths or TEMPLATE_EXAMPLE_ROWS)
     notes = [
-        "All columns are required; hover a header to see its rule.",
+        "Columns marked required must be filled; hover a header to see its rule.",
         "This file lists the current booths: edit them and upload the file back. A row whose Mandal + Booth No "
         "already exists updates that booth; new rows add booths.",
         "Accepted files: .xlsx, .xls or .csv.",
@@ -244,17 +157,13 @@ async def build_booth_template(db: AsyncSession) -> bytes:
 
 
 def booth_template_columns(mandals: list[str]) -> list[TemplateColumn]:
-    votes = "Whole number, 0 or more"
     return [
-        TemplateColumn("Booth No", True, "Booth number as printed, e.g. 001", as_text=True),
-        TemplateColumn("In Charge", True, "Booth in-charge name"),
+        TemplateColumn("Booth No", True, "Booth number as printed, e.g. 256", as_text=True),
+        TemplateColumn("Polling Station", True, "Polling station name"),
+        TemplateColumn("Voters", True, "Whole number of voters in the booth"),
         TemplateColumn("Mandal", True, "One of the mandals in the dropdown", choices=mandals or None),
         TemplateColumn("Village", True, "Village in that mandal"),
-        TemplateColumn("Registered Votes", True, "Whole number"),
-        TemplateColumn("Votes Polled", True, "Whole number, not more than Registered Votes"),
-        TemplateColumn("TDP", True, votes),
-        TemplateColumn("YSP", True, votes),
-        TemplateColumn("Janasena", True, votes),
-        TemplateColumn("Congress", True, f"{votes}. TDP + YSP + Janasena + Congress must not exceed Registered Votes"),
-        TemplateColumn("Status", True, "On Time or Delayed", choices=["On Time", "Delayed"]),
+        TemplateColumn("Agent Name", True, "Booth agent name"),
+        TemplateColumn("Agent Mobile", True, "10 digits, starts with 6-9", as_text=True),
+        TemplateColumn("Agent Alt Mobile", False, "10 digits, starts with 6-9", as_text=True),
     ]

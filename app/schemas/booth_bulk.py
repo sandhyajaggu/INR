@@ -1,79 +1,48 @@
-"""Row shape for the booths bulk-upload sheet (Super Admin → Booths → Upload).
+"""Row shape for the booths upload (frontend: BoothModals.jsx UploadBoothsModal).
 
-Column headers match the Upload Booth Data popup ("Booth No", "In Charge",
-...), normalized to snake_case by the sheet parser. Every column is
-mandatory. Mandal/Village are given by name and resolved to IDs by the
-import service.
+Template columns: Booth No, Polling Station, Voters, Mandal, Village,
+Agent Name, Agent Mobile, Agent Alt Mobile. Same rules as the Add Booth
+form: everything except Agent Alt Mobile is required.
 """
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import ConfigDict, field_validator
 
-BOOTH_STATUSES = ("On Time", "Delayed")
+from app.schemas.common import coerce_excel_cell_to_str
+from app.schemas.geography import BoothCreate
 
-# Sheet header (as shown in the template) -> normalized key.
+# Sheet header (as shown in the template) -> BoothCreate key.
 BOOTH_SHEET_COLUMNS: dict[str, str] = {
     "Booth No": "booth_no",
-    "In Charge": "in_charge",
+    "Polling Station": "name",
+    "Voters": "voters",
     "Mandal": "mandal",
     "Village": "village",
-    "Registered Votes": "registered_votes",
-    "Votes Polled": "votes_polled",
-    "TDP": "tdp",
-    "YSP": "ysp",
-    "Janasena": "janasena",
-    "Congress": "congress",
-    "Status": "status",
+    "Agent Name": "agent_name",
+    "Agent Mobile": "agent_mobile",
+    "Agent Alt Mobile": "agent_alt_mobile",
 }
 BOOTH_COLUMN_LABELS = {key: label for label, key in BOOTH_SHEET_COLUMNS.items()}
 
+# Normalized header -> BoothCreate key (template headers plus common variants).
+BOOTH_HEADER_ALIASES: dict[str, str] = {
+    "polling_station": "name",
+    "booth_name": "name",
+    "station_name": "name",
+    "booth_number": "booth_no",
+    "registered_votes": "voters",
+    "total_voters": "voters",
+    "in_charge": "agent_name",
+    "agent": "agent_name",
+    "agent_alternate_mobile": "agent_alt_mobile",
+    "mandal_name": "mandal",
+    "village_name": "village",
+}
 
-class BoothBulkRow(BaseModel):
-    booth_no: str = Field(max_length=20)
-    in_charge: str = Field(min_length=1, max_length=150)
-    mandal: str
-    village: str
-    registered_votes: int = Field(ge=0)
-    votes_polled: int = Field(ge=0)
-    tdp: int = Field(ge=0)
-    ysp: int = Field(ge=0)
-    janasena: int = Field(ge=0)
-    congress: int = Field(ge=0)
-    status: str
 
-    @field_validator("booth_no", mode="before")
+class BoothBulkRow(BoothCreate):
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("agent_mobile", "agent_alt_mobile", mode="before")
     @classmethod
-    def _booth_no_to_str(cls, v: object) -> object:
-        # Excel stores a typed booth number like 12 as a number (12 or 12.0);
-        # booths.booth_number is text, so compare/store it as "12".
-        if isinstance(v, float) and v.is_integer():
-            v = int(v)
-        if isinstance(v, int):
-            return str(v)
-        return v.strip() if isinstance(v, str) else v
-
-    @field_validator("in_charge", "mandal", "village", mode="before")
-    @classmethod
-    def _strip(cls, v: object) -> object:
-        return v.strip() if isinstance(v, str) else v
-
-    @field_validator("status", mode="before")
-    @classmethod
-    def _canonical_status(cls, v: object) -> str:
-        text = " ".join(str(v).split()).lower()
-        for status in BOOTH_STATUSES:
-            if status.lower() == text:
-                return status
-        raise ValueError(f"must be 'On Time' or 'Delayed', got '{v}'")
-
-    @model_validator(mode="after")
-    def _votes_within_registered(self) -> "BoothBulkRow":
-        if self.votes_polled > self.registered_votes:
-            raise ValueError(
-                f"Votes Polled ({self.votes_polled}) is more than Registered Votes ({self.registered_votes})"
-            )
-        party_total = self.tdp + self.ysp + self.janasena + self.congress
-        if party_total > self.registered_votes:
-            raise ValueError(
-                f"TDP + YSP + Janasena + Congress ({party_total}) is more than Registered Votes ({self.registered_votes})"
-            )
-        return self
+    def _numeric_mobile(cls, v: object) -> object:
+        return coerce_excel_cell_to_str(v)
