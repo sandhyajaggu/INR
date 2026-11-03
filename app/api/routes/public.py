@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.dependencies import DbSession
-from app.models.geography import Mandal, Village
+from app.models.geography import Booth, Mandal, Village
 from app.models.voters import Voter
 from app.schemas.contact import PublicVoterLookupOut
 
@@ -20,15 +20,16 @@ router = APIRouter(prefix="/public", tags=["Public"])
 )
 async def public_voter_lookup(epic_no: str, db: DbSession) -> PublicVoterLookupOut:
     stmt = (
-        select(Voter, Village.name, Mandal.name)
+        select(Voter, Village.name, Mandal.name, Booth.booth_number)
         .join(Village, Village.id == Voter.village_id)
         .join(Mandal, Mandal.id == Voter.mandal_id)
-        .where(Voter.epic_no == epic_no.upper())
+        .outerjoin(Booth, Booth.id == Voter.booth_id)
+        .where(Voter.epic_no == epic_no.strip().upper(), Voter.removed_at.is_(None))
     )
     row = (await db.execute(stmt)).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "EPIC number not found")
-    voter, village_name, mandal_name = row
+    voter, village_name, mandal_name, booth_number = row
     return PublicVoterLookupOut(
         name=voter.name,
         mobile=voter.mobile,
@@ -36,6 +37,10 @@ async def public_voter_lookup(epic_no: str, db: DbSession) -> PublicVoterLookupO
         village_name=village_name,
         mandal_id=voter.mandal_id,
         mandal_name=mandal_name,
+        epic_no=voter.epic_no,
+        mandal=mandal_name,
+        village=village_name,
+        booth_no=f"#{booth_number}" if booth_number else None,
     )
 
 

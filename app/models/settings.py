@@ -1,4 +1,5 @@
 from sqlalchemy import BigInteger, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -21,3 +22,4 @@ class AppSettings(Base):
     office_address: Mapped[str | None] = mapped_column(Text)
     contact_email: Mapped[str | None] = mapped_column(String(150))
     contact_phone: Mapped[str | None] = mapped_column(String(15))
+    birthday_settings: Mapped[dict | None] = mapped_column(JSONB)

@@ -45,3 +45,8 @@ class PublicVoterLookupOut(ORMModel):
     village_name: str
     mandal_id: int
     mandal_name: str
+    # Fields the public Contact page reads
+    epic_no: str | None = None
+    mandal: str | None = None
+    village: str | None = None
+    booth_no: str | None = None

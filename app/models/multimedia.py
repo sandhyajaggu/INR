@@ -30,12 +30,14 @@ class Mp3Song(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    file_url: Mapped[str] = mapped_column(Text, nullable=False)
+    file_url: Mapped[str | None] = mapped_column(Text)
     file_name: Mapped[str | None] = mapped_column(String(255))
     duration_seconds: Mapped[int | None] = mapped_column(Integer)
     description: Mapped[str | None] = mapped_column(Text)
     play_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     download_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    duration: Mapped[str | None] = mapped_column(String(20))  # "14:20" as shown on the Media page
+    file_size: Mapped[str | None] = mapped_column(String(30))  # "13.2 MB"
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     date_added: Mapped[date] = mapped_column(Date, server_default=text("CURRENT_DATE"))
 
@@ -51,6 +53,10 @@ class Video(Base):
     video_source: Mapped[str] = mapped_column(String(20), nullable=False)
     youtube_url: Mapped[str | None] = mapped_column(Text)
     video_file_url: Mapped[str | None] = mapped_column(Text)
+    channel: Mapped[str | None] = mapped_column(String(150))
+    thumbnail_url: Mapped[str | None] = mapped_column(Text)
+    duration: Mapped[str | None] = mapped_column(String(20))
+    file_size: Mapped[str | None] = mapped_column(String(30))
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     upload_date: Mapped[date] = mapped_column(Date, server_default=text("CURRENT_DATE"))
@@ -63,5 +69,6 @@ class PressGalleryItem(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     photo_url: Mapped[str | None] = mapped_column(Text)
     caption: Mapped[str | None] = mapped_column(Text)
+    video_url: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     date_added: Mapped[date] = mapped_column(Date, server_default=text("CURRENT_DATE"))

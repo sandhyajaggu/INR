@@ -23,6 +23,7 @@ from app.api.routes import (
     beneficiaries_maha_shakthi,
     beneficiaries_thalliki_vandanam,
     beneficiaries_yuvagalam,
+    birthdays,
     booths,
     booths_bulk,
     cmrf_applications,
@@ -37,16 +38,18 @@ from app.api.routes import (
     gallery,
     janata_darbar,
     local_leaders,
+    media,
     mp3,
     notes_followups,
     polling_day,
     press,
     public,
+    public_enquiries,
     reports,
     schemes,
 )
 from app.api.routes import settings as settings_routes
-from app.api.routes import staff, surveys, videos, voters
+from app.api.routes import staff, surveys, surveys_v2, videos, voters
 from app.core.config import settings
 
 app = FastAPI(
@@ -109,7 +112,12 @@ app.include_router(videos.router)
 app.include_router(press.router)
 
 # --- Engagement modules -------------------------------------------------------
+app.include_router(surveys_v2.voter_surveys_router)
+app.include_router(surveys_v2.campaigns_router)
+app.include_router(surveys_v2.war_room_router)
 app.include_router(surveys.router)
+app.include_router(birthdays.router)
+app.include_router(media.router)
 app.include_router(events.router)
 app.include_router(notes_followups.router)
 app.include_router(local_leaders.router)
@@ -118,6 +126,9 @@ app.include_router(janata_darbar.router)
 # --- Public-facing ------------------------------------------------------
 app.include_router(contact.router)
 app.include_router(public.router)
+app.include_router(media.public_router)
+app.include_router(public_enquiries.public_router)
+app.include_router(public_enquiries.router)
 app.include_router(achievements.router)
 
 # --- Analytics & admin -------------------------------------------------

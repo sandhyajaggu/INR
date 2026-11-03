@@ -5,6 +5,16 @@ from app.models.activity_log import ActivityLog
 from app.models.cmrf import CmrfApplication
 from app.models.contact import ContactMessage
 from app.models.development_works import DevelopmentWork
+from app.models.engagement import (
+    BirthdayWish,
+    MediaAlbum,
+    MobileOtp,
+    OutboxMessage,
+    PublicEnquiry,
+    SurveyCampaign,
+    VoterSurvey,
+    WarRoomAlert,
+)
 from app.models.events import Event
 from app.models.families import Family, FamilyMember
 from app.models.government_offices import GovernmentOffice
@@ -20,6 +30,14 @@ from app.models.surveys import Survey
 from app.models.voters import Voter
 
 __all__ = [
+    "BirthdayWish",
+    "MediaAlbum",
+    "MobileOtp",
+    "OutboxMessage",
+    "PublicEnquiry",
+    "SurveyCampaign",
+    "VoterSurvey",
+    "WarRoomAlert",
     "Achievement",
     "ActivityLog",
     "AppSettings",

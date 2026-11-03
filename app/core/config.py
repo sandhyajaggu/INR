@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
+    # Public website (used to build shareable survey links)
+    public_site_url: str = "https://mlainr.com"
+
     # CORS — comma-separated origins
     cors_origins: str = "http://localhost:3000"
 
