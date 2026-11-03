@@ -17,10 +17,10 @@ SCHEMES = [
     {"scheme_code": "cmrf", "scheme_name": "CM Relief Fund", "category": "Relief Fund"},
     {"scheme_code": "aadabidda_nidhi", "scheme_name": "Aadabidda Nidhi", "category": "Welfare"},
     {"scheme_code": "thalliki_vandanam", "scheme_name": "Thalliki Vandanam", "category": "Education"},
-    {"scheme_code": "deepam_scheme", "scheme_name": "Deepam Gas Scheme", "category": "Welfare"},
-    {"scheme_code": "maha_shakthi", "scheme_name": "Maha Shakthi (Free Bus Travel)", "category": "Transport"},
-    {"scheme_code": "annadata_sukhibhava", "scheme_name": "Annadata Sukhibhava", "category": "Agriculture"},
-    {"scheme_code": "yuvagalam", "scheme_name": "Yuvagalam", "category": "Employment"},
+    {"scheme_code": "deepam_scheme", "scheme_name": "Deepam", "category": "Welfare"},
+    {"scheme_code": "maha_shakthi", "scheme_name": "Sree Shakthi", "category": "Transport"},
+    {"scheme_code": "annadata_sukhibhava", "scheme_name": "Annadatha Sukhibhava", "category": "Agriculture"},
+    {"scheme_code": "yuvagalam", "scheme_name": "Youth Employment", "category": "Employment"},
 ]
 
 

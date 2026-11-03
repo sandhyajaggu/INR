@@ -22,6 +22,15 @@ class Scheme(Base):
     category: Mapped[str | None] = mapped_column(String(100))
     launch_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
+    # Government Schemes page fields
+    short_code: Mapped[str | None] = mapped_column(String(10))
+    telugu_name: Mapped[str | None] = mapped_column(String(150))
+    department: Mapped[str | None] = mapped_column(String(150))
+    frequency: Mapped[str | None] = mapped_column(String(50))
+    benefit: Mapped[str | None] = mapped_column(String(200))
+    amount_per_beneficiary: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    extra_details: Mapped[str | None] = mapped_column(Text)
+    other_spellings: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -25,12 +25,14 @@ from app.api.routes import (
     beneficiaries_yuvagalam,
     booths,
     booths_bulk,
+    cmrf_applications,
     contact,
     dashboard,
     development_works,
     events,
     families,
     geography,
+    government_offices,
     files,
     gallery,
     janata_darbar,
@@ -83,9 +85,10 @@ app.include_router(booths_bulk.router)
 app.include_router(booths.router)
 app.include_router(polling_day.router)
 app.include_router(families.router)
-app.include_router(development_works.extra_router)
 app.include_router(development_works.router)
 app.include_router(schemes.router)
+app.include_router(cmrf_applications.router)
+app.include_router(government_offices.router)
 # NOTE: each per-scheme beneficiaries router (e.g. /beneficiaries/cmrf) must be
 # included BEFORE the generic beneficiaries.router — its bare "/{beneficiary_id}"
 # path param would otherwise swallow "/beneficiaries/cmrf" etc. and 422 on them.
@@ -107,7 +110,6 @@ app.include_router(press.router)
 
 # --- Engagement modules -------------------------------------------------------
 app.include_router(surveys.router)
-app.include_router(events.extra_router)
 app.include_router(events.router)
 app.include_router(notes_followups.router)
 app.include_router(local_leaders.router)

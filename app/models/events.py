@@ -1,6 +1,7 @@
-from datetime import date, time
+from datetime import date, datetime, time
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, Time, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -9,7 +10,9 @@ from app.core.database import Base
 class Event(Base):
     __tablename__ = "events"
     __table_args__ = (
-        CheckConstraint("status IN ('upcoming','completed','cancelled')", name="ck_events_status"),
+        CheckConstraint(
+            "status IN ('Scheduled','Upcoming','Completed','Postponed','Cancelled')", name="ck_events_status"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -22,7 +25,12 @@ class Event(Base):
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_time: Mapped[time | None] = mapped_column(Time)
     expected_attendance: Mapped[int | None] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="upcoming", server_default="upcoming")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Scheduled", server_default="Scheduled")
     photo_url: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("staff_users.id", ondelete="SET NULL"))
+    live_meeting_link: Mapped[str | None] = mapped_column(Text)
+    # [{"label": "...", "url": "..."}]
+    prev_meeting_links: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

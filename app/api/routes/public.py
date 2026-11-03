@@ -1,4 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from datetime import date
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.dependencies import DbSession
@@ -34,3 +37,32 @@ async def public_voter_lookup(epic_no: str, db: DbSession) -> PublicVoterLookupO
         mandal_id=voter.mandal_id,
         mandal_name=mandal_name,
     )
+
+
+# --- Public website pages ------------------------------------------------------
+# The public site (PublicEvents.jsx, PublicAttainments.jsx) shows events and
+# development works without signing in. Same record shapes as the dashboard.
+
+
+@router.get("/events", summary="Events for the public website (unauthenticated)")
+async def public_events(
+    db: DbSession,
+    upcoming_only: bool = Query(False, description="Only events dated today or later"),
+    limit: int = Query(200, ge=1, le=1000),
+) -> list[dict[str, Any]]:
+    from app.api.routes.events import list_event_rows
+
+    rows = await list_event_rows(db, from_date=date.today() if upcoming_only else None, limit=limit, ascending=upcoming_only)
+    return [r for r in rows if r["status"] != "Cancelled"]
+
+
+@router.get("/development-works", summary="Development works / attainments for the public website (unauthenticated)")
+async def public_development_works(
+    db: DbSession,
+    mandal: str | None = Query(None),
+    category: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+) -> list[dict[str, Any]]:
+    from app.api.routes.development_works import list_work_rows
+
+    return await list_work_rows(db, mandal=mandal, category=category, status_filter=status_filter)

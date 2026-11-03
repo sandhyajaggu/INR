@@ -65,7 +65,7 @@ async def link_voter_by_epic(db: AsyncSession, epic_no: str | None) -> int | Non
 
 
 async def get_beneficiary_or_404(db: AsyncSession, beneficiary_id: int) -> Beneficiary:
-    obj = await db.get(Beneficiary, beneficiary_id)
+    obj = await db.get(Beneficiary, beneficiary_id, populate_existing=True)
     if obj is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Beneficiary not found")
     return obj

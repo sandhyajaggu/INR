@@ -2,10 +2,12 @@
 
 from app.models.achievements import Achievement
 from app.models.activity_log import ActivityLog
+from app.models.cmrf import CmrfApplication
 from app.models.contact import ContactMessage
 from app.models.development_works import DevelopmentWork
 from app.models.events import Event
 from app.models.families import Family, FamilyMember
+from app.models.government_offices import GovernmentOffice
 from app.models.geography import Booth, Mandal, Village, VillageAlias
 from app.models.janata_darbar import JanataDarbarVisit
 from app.models.local_leaders import LocalLeader
@@ -23,12 +25,14 @@ __all__ = [
     "AppSettings",
     "Beneficiary",
     "Booth",
+    "CmrfApplication",
     "ContactMessage",
     "DevelopmentWork",
     "Event",
     "Family",
     "FamilyMember",
     "GalleryPhoto",
+    "GovernmentOffice",
     "JanataDarbarVisit",
     "LocalLeader",
     "Mandal",

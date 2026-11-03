@@ -113,3 +113,14 @@ async def resolve_geography(
     mandal_id = await resolve_mandal_id(db, mandal_name)
     village_id = await resolve_village_id(db, village_name, mandal_id) if village_name else None
     return mandal_id, village_id
+
+
+async def name_maps(
+    db: AsyncSession, mandal_ids: set[int | None], village_ids: set[int | None]
+) -> tuple[dict[int, str], dict[int, str]]:
+    """{mandal_id: name}, {village_id: name} for the given ids (one query each)."""
+    m_ids = {i for i in mandal_ids if i is not None}
+    v_ids = {i for i in village_ids if i is not None}
+    mandals = dict((await db.execute(select(Mandal.id, Mandal.name).where(Mandal.id.in_(m_ids)))).all()) if m_ids else {}
+    villages = dict((await db.execute(select(Village.id, Village.name).where(Village.id.in_(v_ids)))).all()) if v_ids else {}
+    return mandals, villages
