@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.dependencies import DbSession, page_access
+from app.core.telugu import LangQuery
 from app.models.geography import Mandal, Village
 from app.models.settings import AppSettings
 from app.services.activity_service import log_activity
@@ -199,22 +200,31 @@ async def settings_payload(db) -> dict[str, Any]:
 
 
 @public_router.get("/settings", summary="Public website settings: default UI language + office profile (unauthenticated)")
-async def get_public_settings(db: DbSession) -> dict[str, Any]:
+async def get_public_settings(db: DbSession, lang: LangQuery | None = None) -> dict[str, Any]:
     """What the public site needs before anyone logs in.
 
     default_language is "te" when Settings > "Telugu default website" is on, else "en"
     (i18next language codes, ready for i18n.changeLanguage()). Only public office
     details are returned; dropdowns and staff preferences stay behind /settings.
+
+    ?lang=te: `profile` holds the Telugu values (English where none entered), and
+    `profile_en` the English ones.
     """
     row = (await db.execute(select(AppSettings).order_by(AppSettings.id).limit(1))).scalar_one_or_none()
     prefs = {**DEFAULT_PREFERENCES, **((row.preferences if row else None) or {})}
     telugu = bool(prefs.get("telugu_default_website"))
-    return {
+    profile = _profile(row) if row else {k: None for k in PROFILE_KEYS}
+    profile_te = {k: ((row.profile_te if row else None) or {}).get(k) for k in PROFILE_KEYS}
+    out: dict[str, Any] = {
         "default_language": "te" if telugu else "en",
         "telugu_default_website": telugu,
-        "profile": _profile(row) if row else {k: None for k in PROFILE_KEYS},
-        "profile_te": {k: ((row.profile_te if row else None) or {}).get(k) for k in PROFILE_KEYS},
+        "profile": profile,
+        "profile_te": profile_te,
     }
+    if lang == "te":
+        out["profile_en"] = profile
+        out["profile"] = {k: profile_te.get(k) or profile.get(k) for k in PROFILE_KEYS}
+    return out
 
 
 @router.get("", summary="getSettings()")

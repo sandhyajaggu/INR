@@ -9,7 +9,7 @@ from app.models.geography import Mandal, Village
 from app.schemas.common import PaginatedResponse
 from app.schemas.contact import ContactMessageCreate, ContactMessageOut, ContactMessageStatusUpdate
 from app.services.beneficiary_service import link_voter_by_epic
-from app.services.geography_service import resolve_geography
+from app.services.geography_service import resolve_geography, english_place_names
 
 router = APIRouter(tags=["Contact Us"])
 
@@ -56,8 +56,7 @@ async def submit_contact_message(payload: ContactMessageCreate, db: DbSession) -
     if data.get("epic_no"):
         data["epic_no"] = data["epic_no"].upper()
     data["voter_id"] = await link_voter_by_epic(db, data.get("epic_no"))
-    mandal_name = data.pop("mandal_name", None)
-    village_name = data.pop("village_name", None)
+    mandal_name, village_name = await english_place_names(db, data.pop("mandal_name", None), data.pop("village_name", None))
     data["mandal_id"], data["village_id"] = await resolve_geography(
         db, mandal_name=mandal_name, village_name=village_name
     )

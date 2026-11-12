@@ -32,7 +32,10 @@ from app.schemas.bulk_import import BulkImportResult, BulkImportRowError, capped
 from app.schemas.events import EVENT_HEADER_ALIASES, EventForm
 from app.services.activity_service import log_activity
 from app.services.excel_import_service import parse_upload_rows
-from app.services.geography_service import load_geography_maps, name_maps, resolve_geography
+from app.core.telugu import apply_te, te_keys, te_updates
+from app.services.geography_service import load_geography_maps, name_maps, resolve_geography, te_name_maps
+
+TE_FIELDS = ("title", "venue", "description", "chief_guest")
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -45,6 +48,7 @@ PREFIX = "EV"
 
 async def event_rows(db, events: list[Event]) -> list[dict[str, Any]]:
     mandals, villages = await name_maps(db, {e.mandal_id for e in events}, {e.village_id for e in events})
+    mandals_te, villages_te = await te_name_maps(db, {e.mandal_id for e in events}, {e.village_id for e in events})
     out = []
     for e in events:
         links = e.prev_meeting_links or []
@@ -68,6 +72,9 @@ async def event_rows(db, events: list[Event]) -> list[dict[str, Any]]:
                 "photo": e.photo_url,
                 "createdAt": e.created_at,
                 "updatedAt": e.updated_at,
+                **te_keys(e.te, TE_FIELDS),
+                "mandal_te": mandals_te.get(e.mandal_id),
+                "village_te": villages_te.get(e.village_id),
             }
         )
     return out
@@ -99,7 +106,7 @@ async def list_event_rows(db, *, scope=None, q=None, mandal=None, status_filter=
     if scope is not None:
         stmt = scope.apply(stmt, mandal_col=Event.mandal_id)
     if mandal:
-        stmt = stmt.where(func.lower(Mandal.name) == mandal.strip().lower())
+        stmt = stmt.where(or_(func.lower(Mandal.name) == mandal.strip().lower(), Mandal.name_te == mandal.strip()))
     if status_filter:
         stmt = stmt.where(Event.status == status_filter)
     if event_type:
@@ -208,6 +215,7 @@ async def get_event(event_id: str, db: DbSession, current_user: CanView) -> dict
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Add an event")
 async def create_event(payload: EventForm, db: DbSession, current_user: CanEdit) -> dict[str, Any]:
     obj = Event(**await _values(db, payload), created_by=current_user.id)
+    apply_te(obj, te_updates(payload, TE_FIELDS))
     db.add(obj)
     await db.flush()
     await log_activity(
@@ -224,6 +232,7 @@ async def update_event(event_id: str, payload: EventForm, db: DbSession, current
     before = (await event_rows(db, [obj]))[0]
     for field, value in (await _values(db, payload)).items():
         setattr(obj, field, value)
+    apply_te(obj, te_updates(payload, TE_FIELDS))
     await db.commit()
     after = (await event_rows(db, [await _get(db, event_id)]))[0]
     keys = ("title", "type", "date", "time", "venue", "mandal", "village", "status", "liveMeetingLink", "prevMeetingLinks")

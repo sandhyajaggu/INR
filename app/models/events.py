@@ -16,6 +16,7 @@ class Event(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    te: Mapped[dict | None] = mapped_column(JSONB)  # Telugu text per field, see app/core/telugu.py
     event_title: Mapped[str] = mapped_column(String(200), nullable=False)
     event_type: Mapped[str | None] = mapped_column(String(100))
     venue: Mapped[str | None] = mapped_column(String(200))

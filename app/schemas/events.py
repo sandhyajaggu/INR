@@ -40,6 +40,11 @@ class EventForm(BaseModel):
     chief_guest: str | None = None
     attendance: int | None = Field(default=None, ge=0, validation_alias=AliasChoices("attendance", "expected_attendance"))
     photo: str | None = Field(default=None, validation_alias=AliasChoices("photo", "photo_url"))
+    # Telugu text for the public website (see app/core/telugu.py). Only the ones sent change; "" clears.
+    title_te: str | None = Field(default=None, max_length=300)
+    venue_te: str | None = Field(default=None, max_length=300)
+    description_te: str | None = None
+    chief_guest_te: str | None = Field(default=None, max_length=300)
 
     @field_validator(
         "title", "type", "venue", "mandal", "village", "liveMeetingLink", "prevMeetingLinks", "description",

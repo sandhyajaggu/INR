@@ -27,6 +27,7 @@ from app.models.engagement import PublicEnquiry
 from app.models.voters import Voter
 from app.schemas.common import validate_mobile_number
 from app.services.activity_service import log_activity
+from app.services.geography_service import english_place_names
 from app.services.notification_service import notify_page
 
 router = APIRouter(prefix="/public-enquiries", tags=["Public Enquiry Requests"])
@@ -147,14 +148,16 @@ async def submit_enquiry(payload: EnquirySubmit, db: DbSession) -> dict[str, Any
         ).scalar_one_or_none()
     feedback = payload.feedback.model_dump(exclude_none=True) if payload.feedback else None
     is_home = (payload.constituency or "").strip().lower() == HOME_CONSTITUENCY
+    # Telugu site sends Telugu mandal / village names; store the English ones the dashboard filters on.
+    mandal, village = await english_place_names(db, payload.mandal, payload.village)
     obj = PublicEnquiry(
         citizen_name=payload.citizenName.strip(),
         epic_no=payload.voterId.strip().upper() if payload.voterId else None,
         voter_id=voter.id if voter else None,
         constituency=payload.constituency,
         enquiry_type=payload.enquiryType,
-        mandal=payload.mandal,
-        village=payload.village,
+        mandal=mandal,
+        village=village,
         mobile=payload.mobile,
         email=payload.email,
         message=payload.message,

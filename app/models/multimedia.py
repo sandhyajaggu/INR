@@ -1,6 +1,7 @@
 from datetime import date
 
 from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -29,6 +30,7 @@ class Mp3Song(Base):
     __tablename__ = "mp3_songs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    te: Mapped[dict | None] = mapped_column(JSONB)  # Telugu text per field, see app/core/telugu.py
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     file_url: Mapped[str | None] = mapped_column(Text)
     file_name: Mapped[str | None] = mapped_column(String(255))
@@ -49,6 +51,7 @@ class Video(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    te: Mapped[dict | None] = mapped_column(JSONB)  # Telugu text per field, see app/core/telugu.py
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     video_source: Mapped[str] = mapped_column(String(20), nullable=False)
     youtube_url: Mapped[str | None] = mapped_column(Text)
@@ -66,6 +69,7 @@ class PressGalleryItem(Base):
     __tablename__ = "press_gallery"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    te: Mapped[dict | None] = mapped_column(JSONB)  # Telugu text per field, see app/core/telugu.py
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     photo_url: Mapped[str | None] = mapped_column(Text)
     caption: Mapped[str | None] = mapped_column(Text)

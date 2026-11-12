@@ -13,7 +13,8 @@
     PUT    /villages/{id}                    {name?, name_te?, mandal?/mandal_id? (move)}
     DELETE /villages/{id}                    409 if voters / booths / ... still use it
 
-    GET    /public/mandals, /public/villages same lists without login (public website forms)
+    GET    /public/mandals, /public/villages same lists without login (public website forms);
+                                         ?lang=te -> "name" is Telugu, English kept in "name_en"
 
 Reads need any login; add/edit need Settings "edit"; delete needs Settings "admin".
 `name` is unchanged from before, so existing dropdown code keeps working.
@@ -28,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.dependencies import CurrentUser, DbSession, page_access
 from app.core.ids import parse_id
+from app.core.telugu import LangQuery, localize_all
 from app.models.geography import Mandal, Village
 from app.models.staff import StaffUser
 from app.services.activity_service import log_activity
@@ -300,18 +302,24 @@ async def delete_village(village_id: str, db: DbSession, current_user: CanDelete
 
 # --- public (no login) -------------------------------------------------------
 
-@public_router.get("/mandals", summary="Mandals for public website forms (unauthenticated)")
-async def public_mandals(db: DbSession) -> list[dict[str, Any]]:
-    return [{"id": m["id"], "name": m["name"], "name_te": m["name_te"]} for m in await _list_mandals(db)]
+@public_router.get("/mandals", summary="Mandals for public website forms (unauthenticated); ?lang=te for Telugu")
+async def public_mandals(db: DbSession, lang: LangQuery = "en") -> list[dict[str, Any]]:
+    rows = [{"id": m["id"], "name": m["name"], "name_te": m["name_te"]} for m in await _list_mandals(db)]
+    return localize_all(rows, lang, ("name",))
 
 
-@public_router.get("/villages", summary="Villages for public website forms (unauthenticated)")
+@public_router.get("/villages", summary="Villages for public website forms (unauthenticated); ?lang=te for Telugu")
 async def public_villages(
     db: DbSession,
-    mandal_name: str | None = Query(None),
+    lang: LangQuery = "en",
+    mandal_name: str | None = Query(None, description="Mandal name in English or Telugu"),
     mandal_id: int | None = Query(None),
 ) -> list[dict[str, Any]]:
-    return [
+    if mandal_name:
+        te_match = (await db.execute(select(Mandal.name).where(Mandal.name_te == mandal_name.strip()))).scalar_one_or_none()
+        mandal_name = te_match or mandal_name
+    rows = [
         {"id": v["id"], "name": v["name"], "name_te": v["name_te"], "mandal": v["mandal"], "mandal_te": v["mandal_te"]}
         for v in await _list_villages(db, mandal_name, mandal_id)
     ]
+    return localize_all(rows, lang, ("name", "mandal"))

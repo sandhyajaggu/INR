@@ -28,6 +28,7 @@ class MediaAlbum(Base):
     __tablename__ = "media_albums"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    te: Mapped[dict | None] = mapped_column(JSONB)  # Telugu text per field, see app/core/telugu.py
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     album_date: Mapped[date | None] = mapped_column(Date)
     cover_url: Mapped[str | None] = mapped_column(Text)

@@ -46,7 +46,8 @@ from app.services.bulk_template_service import (
     xlsx_attachment_headers,
 )
 from app.services.excel_import_service import parse_upload_rows
-from app.services.geography_service import load_geography_maps, name_maps, resolve_geography
+from app.core.telugu import apply_te, te_keys, te_updates
+from app.services.geography_service import load_geography_maps, name_maps, resolve_geography, te_name_maps
 
 router = APIRouter(prefix="/development-works", tags=["Development Works"])
 
@@ -55,10 +56,13 @@ CanEdit = page_access("development_works", "edit")
 CanDelete = page_access("development_works", "admin")
 
 PREFIX = "DW"
+TE_FIELDS = ("name", "remarks")  # contractor has its own contractor_te column
+PUBLIC_TE_FIELDS = ("name", "remarks", "contractor", "mandal", "village")
 
 
 async def work_rows(db, works: list[DevelopmentWork]) -> list[dict[str, Any]]:
     mandals, villages = await name_maps(db, {w.mandal_id for w in works}, {w.village_id for w in works})
+    mandals_te, villages_te = await te_name_maps(db, {w.mandal_id for w in works}, {w.village_id for w in works})
     now = datetime.now(timezone.utc)
     return [
         {
@@ -81,6 +85,9 @@ async def work_rows(db, works: list[DevelopmentWork]) -> list[dict[str, Any]]:
             "days_since_update": (now - w.updated_at).days if w.updated_at else 0,
             "createdAt": w.created_at,
             "updatedAt": w.updated_at,
+            **te_keys(w.te, TE_FIELDS),
+            "mandal_te": mandals_te.get(w.mandal_id),
+            "village_te": villages_te.get(w.village_id),
         }
         for w in works
     ]
@@ -115,7 +122,7 @@ async def list_work_rows(db, *, scope=None, q=None, mandal=None, status_filter=N
     if scope is not None:
         stmt = scope.apply(stmt, mandal_col=DevelopmentWork.mandal_id)
     if mandal:
-        stmt = stmt.where(func.lower(Mandal.name) == mandal.strip().lower())
+        stmt = stmt.where(or_(func.lower(Mandal.name) == mandal.strip().lower(), Mandal.name_te == mandal.strip()))
     if status_filter:
         stmt = stmt.where(DevelopmentWork.status == status_filter)
     if category:
@@ -256,6 +263,7 @@ async def get_work(work_id: str, db: DbSession, current_user: CanView) -> dict[s
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Add a development work")
 async def create_work(payload: DevelopmentWorkCreate, db: DbSession, current_user: CanEdit) -> dict[str, Any]:
     work = DevelopmentWork(**await _values(db, payload), created_by=current_user.id)
+    apply_te(work, te_updates(payload, TE_FIELDS))
     db.add(work)
     await db.flush()
     await log_activity(
@@ -276,6 +284,7 @@ async def update_work(work_id: str, payload: DevelopmentWorkUpdate, db: DbSessio
     before = (await work_rows(db, [work]))[0]
     for field, value in (await _values(db, payload)).items():
         setattr(work, field, value)
+    apply_te(work, te_updates(payload, TE_FIELDS))
     await db.commit()
     after = (await work_rows(db, [await _get(db, work_id)]))[0]
     keys = ("name", "category", "mandal", "village", "budget", "fund_source", "start_date", "completion_date",

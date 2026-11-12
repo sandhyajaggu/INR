@@ -18,7 +18,9 @@
     POST   /media/mp4                      createMP4 {title, date, duration, size, file_url, thumbnail}
     PUT    /media/mp4/{id}
     DELETE /media/mp4/{id}
-    GET    /public/media                   same as GET /media, no sign-in (public website)
+    GET    /public/media?lang=te           same as GET /media, no sign-in (public website); lang=te -> Telugu titles
+
+Every form also takes title_te (press meets and videos: description_te too); rows return them.
 
 Deletes return {"success": true}. Files themselves go through POST /files/upload.
 """
@@ -36,6 +38,7 @@ from app.core.dependencies import DbSession, page_access
 from app.core.ids import format_id, parse_id
 from app.models.engagement import MediaAlbum
 from app.models.multimedia import Mp3Song, PressGalleryItem, Video
+from app.core.telugu import LangQuery, apply_te, localize_all, te_keys, te_updates
 from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/media", tags=["Media & Gallery"])
@@ -72,11 +75,16 @@ def _seconds(duration: str | None) -> int | None:
     return total
 
 
+MEDIA_TE = ("title", "description")
+
+
 class _MediaBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     title: str = Field(min_length=1, max_length=200)
     date: dt.date | None = None
+    # Telugu for the public website (app/core/telugu.py). Only sent keys change; "" clears.
+    title_te: str | None = Field(default=None, max_length=300)
 
     @field_validator("date", mode="before")
     @classmethod
@@ -86,6 +94,7 @@ class _MediaBase(BaseModel):
 
 class PressMeetForm(_MediaBase):
     description: str | None = None
+    description_te: str | None = None
     url: str | None = None
     image: str | None = None
 
@@ -107,6 +116,7 @@ class VideoForm(_MediaBase):
     url: str = Field(min_length=1)
     thumbnail: str | None = None
     channel: str | None = None
+    description_te: str | None = None
 
 
 class AudioForm(_MediaBase):
@@ -128,6 +138,7 @@ def press_row(p: PressGalleryItem) -> dict[str, Any]:
         **_date_fields(p.date_added),
         "url": p.video_url,
         "image": p.photo_url or (f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else None),
+        **te_keys(p.te, MEDIA_TE),
     }
 
 
@@ -140,6 +151,7 @@ def album_row(a: MediaAlbum) -> dict[str, Any]:
         "cover": a.cover_url or (photos[0] if photos else None),
         "photos_count": len(photos),
         "photos": photos,
+        **te_keys(a.te, ("title",)),
     }
 
 
@@ -155,6 +167,7 @@ def video_row(v: Video) -> dict[str, Any]:
         "embed_id": vid,
         "thumbnail": v.thumbnail_url or (f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else None),
         "description": v.description,
+        **te_keys(v.te, MEDIA_TE),
     }
 
 
@@ -169,6 +182,7 @@ def mp3_row(m: Mp3Song) -> dict[str, Any]:
         "file_url": m.file_url,
         "play_count": m.play_count,
         "download_count": m.download_count,
+        **te_keys(m.te, ("title",)),
     }
 
 
@@ -182,6 +196,7 @@ def mp4_row(v: Video) -> dict[str, Any]:
         "size": v.file_size,
         "thumbnail": v.thumbnail_url,
         "file_url": v.video_file_url,
+        **te_keys(v.te, ("title",)),
     }
 
 
@@ -220,9 +235,9 @@ async def get_media(db: DbSession, current_user: CanView) -> dict[str, list[dict
     return await all_media(db)
 
 
-@public_router.get("/media", summary="All media for the public website (unauthenticated)")
-async def get_public_media(db: DbSession) -> dict[str, list[dict[str, Any]]]:
-    return await all_media(db)
+@public_router.get("/media", summary="All media for the public website (unauthenticated); ?lang=te for Telugu")
+async def get_public_media(db: DbSession, lang: LangQuery = "en") -> dict[str, list[dict[str, Any]]]:
+    return {group: localize_all(rows, lang, MEDIA_TE) for group, rows in (await all_media(db)).items()}
 
 
 # --- press meets ----------------------------------------------------------------
@@ -243,6 +258,7 @@ async def create_press_meet(payload: PressMeetForm, db: DbSession, current_user:
     _apply_press(obj, payload)
     db.add(obj)
     await db.flush()
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "press_meet_added", f"Added press meet {obj.title}", obj.id)
     await db.commit()
     return press_row(await _get(db, PressGalleryItem, str(obj.id), "Press meet"))
@@ -252,6 +268,7 @@ async def create_press_meet(payload: PressMeetForm, db: DbSession, current_user:
 async def update_press_meet(item_id: str, payload: PressMeetForm, db: DbSession, current_user: CanEdit) -> dict[str, Any]:
     obj = await _get(db, PressGalleryItem, item_id, "Press meet")
     _apply_press(obj, payload)
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "press_meet_updated", f"Updated press meet {obj.title}", obj.id)
     await db.commit()
     return press_row(await _get(db, PressGalleryItem, item_id, "Press meet"))
@@ -277,6 +294,7 @@ async def create_album(payload: AlbumForm, db: DbSession, current_user: CanEdit)
     )
     db.add(obj)
     await db.flush()
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "album_added", f"Created album {obj.title}", obj.id)
     await db.commit()
     return album_row(await _get(db, MediaAlbum, str(obj.id), "Album"))
@@ -291,6 +309,7 @@ async def update_album(album_id: str, payload: AlbumForm, db: DbSession, current
     obj.cover_url = payload.cover or obj.cover_url
     if payload.photos is not None:
         obj.photos = payload.photos
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "album_updated", f"Updated album {obj.title}", obj.id)
     await db.commit()
     return album_row(await _get(db, MediaAlbum, album_id, "Album"))
@@ -344,6 +363,7 @@ async def create_video(payload: VideoForm, db: DbSession, current_user: CanEdit)
     _apply_video(obj, payload)
     db.add(obj)
     await db.flush()
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "video_added", f"Added video {obj.title}", obj.id)
     await db.commit()
     return video_row(await _get(db, Video, str(obj.id), "Video"))
@@ -353,6 +373,7 @@ async def create_video(payload: VideoForm, db: DbSession, current_user: CanEdit)
 async def update_video(video_id: str, payload: VideoForm, db: DbSession, current_user: CanEdit) -> dict[str, Any]:
     obj = await _get(db, Video, video_id, "Video", source="youtube")
     _apply_video(obj, payload)
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "video_updated", f"Updated video {obj.title}", obj.id)
     await db.commit()
     return video_row(await _get(db, Video, video_id, "Video"))
@@ -380,6 +401,7 @@ async def create_mp3(payload: AudioForm, db: DbSession, current_user: CanEdit) -
         obj.date_added = payload.date
     db.add(obj)
     await db.flush()
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "mp3_added", f"Added MP3 {obj.title}", obj.id)
     await db.commit()
     return mp3_row(await _get(db, Mp3Song, str(obj.id), "MP3"))
@@ -398,6 +420,7 @@ async def update_mp3(item_id: str, payload: AudioForm, db: DbSession, current_us
         obj.file_size = payload.size
     if payload.file_url:
         obj.file_url = payload.file_url
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "mp3_updated", f"Updated MP3 {obj.title}", obj.id)
     await db.commit()
     return mp3_row(await _get(db, Mp3Song, item_id, "MP3"))
@@ -425,6 +448,7 @@ async def create_mp4(payload: Mp4Form, db: DbSession, current_user: CanEdit) -> 
         obj.upload_date = payload.date
     db.add(obj)
     await db.flush()
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "mp4_added", f"Added MP4 {obj.title}", obj.id)
     await db.commit()
     return mp4_row(await _get(db, Video, str(obj.id), "MP4"))
@@ -440,6 +464,7 @@ async def update_mp4(item_id: str, payload: Mp4Form, db: DbSession, current_user
                          ("video_file_url", payload.file_url), ("thumbnail_url", payload.thumbnail)):
         if value is not None:
             setattr(obj, field, value)
+    apply_te(obj, te_updates(payload, MEDIA_TE))
     await _log(db, current_user, "mp4_updated", f"Updated MP4 {obj.title}", obj.id)
     await db.commit()
     return mp4_row(await _get(db, Video, item_id, "MP4"))

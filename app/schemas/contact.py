@@ -50,3 +50,8 @@ class PublicVoterLookupOut(ORMModel):
     mandal: str | None = None
     village: str | None = None
     booth_no: str | None = None
+    # Telugu names, always present; with ?lang=te the fields above are Telugu and these hold English
+    mandal_te: str | None = None
+    village_te: str | None = None
+    mandal_en: str | None = None
+    village_en: str | None = None

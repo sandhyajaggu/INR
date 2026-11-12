@@ -124,3 +124,35 @@ async def name_maps(
     mandals = dict((await db.execute(select(Mandal.id, Mandal.name).where(Mandal.id.in_(m_ids)))).all()) if m_ids else {}
     villages = dict((await db.execute(select(Village.id, Village.name).where(Village.id.in_(v_ids)))).all()) if v_ids else {}
     return mandals, villages
+
+
+async def te_name_maps(
+    db: AsyncSession, mandal_ids: set[int | None], village_ids: set[int | None]
+) -> tuple[dict[int, str | None], dict[int, str | None]]:
+    """{mandal_id: name_te}, {village_id: name_te} — the Telugu twins of name_maps()."""
+    m_ids = {i for i in mandal_ids if i is not None}
+    v_ids = {i for i in village_ids if i is not None}
+    mandals = dict((await db.execute(select(Mandal.id, Mandal.name_te).where(Mandal.id.in_(m_ids)))).all()) if m_ids else {}
+    villages = dict((await db.execute(select(Village.id, Village.name_te).where(Village.id.in_(v_ids)))).all()) if v_ids else {}
+    return mandals, villages
+
+
+async def english_place_names(db: AsyncSession, mandal: str | None, village: str | None) -> tuple[str | None, str | None]:
+    """Map a mandal / village typed or picked in Telugu back to its English name (unchanged if not Telugu)."""
+    if mandal and mandal.strip():
+        row = (await db.execute(select(Mandal.id, Mandal.name).where(Mandal.name_te == mandal.strip()))).first()
+        mandal_id = row[0] if row else None
+        if row:
+            mandal = row[1]
+        else:
+            mandal_id = (
+                await db.execute(select(Mandal.id).where(func.lower(Mandal.name) == mandal.strip().lower()))
+            ).scalar_one_or_none()
+        if village and village.strip():
+            stmt = select(Village.name).where(Village.name_te == village.strip())
+            if mandal_id:
+                stmt = stmt.where(Village.mandal_id == mandal_id)
+            english = (await db.execute(stmt.limit(1))).scalar_one_or_none()
+            if english:
+                village = english
+    return mandal, village

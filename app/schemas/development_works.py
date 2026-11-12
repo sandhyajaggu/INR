@@ -46,6 +46,9 @@ class DevelopmentWorkCreate(BaseModel):
     remarks: str | None = Field(default=None, validation_alias=AliasChoices("remarks", "description"))
     photo: str | None = Field(default=None, validation_alias=AliasChoices("photo", "photo_url"))
     completed_photo: str | None = Field(default=None, validation_alias=AliasChoices("completed_photo", "completed_photo_url"))
+    # Telugu text for the public website (see app/core/telugu.py). Only the ones sent change; "" clears.
+    name_te: str | None = Field(default=None, max_length=400)
+    remarks_te: str | None = None
 
     @field_validator(
         "category", "fund_source", "village", "contractor", "contractor_te", "remarks", "photo", "completed_photo",
