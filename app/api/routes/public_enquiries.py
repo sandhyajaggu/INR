@@ -27,6 +27,7 @@ from app.models.engagement import PublicEnquiry
 from app.models.voters import Voter
 from app.schemas.common import validate_mobile_number
 from app.services.activity_service import log_activity
+from app.services.notification_service import notify_page
 
 router = APIRouter(prefix="/public-enquiries", tags=["Public Enquiry Requests"])
 public_router = APIRouter(prefix="/public", tags=["Public"])
@@ -164,6 +165,16 @@ async def submit_enquiry(payload: EnquirySubmit, db: DbSession) -> dict[str, Any
         matched_in_voter_list=voter is not None,
     )
     db.add(obj)
+    await db.flush()
+    place = ", ".join(x for x in (obj.village, obj.mandal) if x)
+    await notify_page(
+        db,
+        "public_enquiry",
+        type="public_enquiry",
+        title=f"New enquiry from {obj.citizen_name}" + (f" ({place})" if place else ""),
+        message=f"{obj.enquiry_type}: {obj.message}"[:500] if obj.enquiry_type else (obj.message or "")[:500],
+        reference_id=format_id(PREFIX, obj.id),
+    )
     await db.commit()
     return {"success": True, "enquiry": enquiry_row(await _get(db, str(obj.id)))}
 

@@ -37,6 +37,7 @@ from app.core.ids import format_id, parse_id
 from app.models.engagement import SurveyCampaign, VoterSurvey, WarRoomAlert
 from app.models.voters import Voter
 from app.services.activity_service import log_activity
+from app.services.notification_service import notify_page
 from app.services.survey_service import IST, survey_score
 from app.services.voter_profile import voter_rows
 from app.services.voter_service import get_voter_or_404
@@ -146,7 +147,7 @@ async def default_questions(current_user: CanView) -> list[dict[str, Any]]:
 
 
 @voter_surveys_router.get("/summary", summary="Surveys page cards")
-async def surveys_summary(db: DbSession, current_user: CanView) -> dict[str, int]:
+async def surveys_summary(db: DbSession, current_user: CanView) -> dict[str, int | float]:
     total, positive, negative, voters = (
         await db.execute(
             select(
@@ -162,6 +163,7 @@ async def surveys_summary(db: DbSession, current_user: CanView) -> dict[str, int
     return {
         "totalSurveys": total, "positive": positive, "negative": negative, "votersSurveyed": voters,
         "runningCampaigns": campaigns, "openWarRoomAlerts": alerts,
+        "positivePct": pct(positive, total), "negativePct": pct(negative, total),
     }
 
 
@@ -229,11 +231,21 @@ async def submit_voter_survey(payload: VoterSurveySubmit, db: DbSession, current
     db.add(survey)
     await db.flush()
     if (notes.escalation or "").strip().lower() in ESCALATING:
-        db.add(
-            WarRoomAlert(
-                voter_id=voter.id, survey_id=survey.id, escalation=notes.escalation, household=notes.householdStatus,
-                field_notes=notes.fieldNotes, booth_agent=current_user.name,
-            )
+        alert = WarRoomAlert(
+            voter_id=voter.id, survey_id=survey.id, escalation=notes.escalation, household=notes.householdStatus,
+            field_notes=notes.fieldNotes, booth_agent=current_user.name,
+        )
+        db.add(alert)
+        await db.flush()
+        await notify_page(
+            db,
+            "surveys_campaigns",
+            type="war_room_alert",
+            title=f"War Room alert: {notes.escalation} — {voter.name or voter.epic_no}",
+            message=(notes.fieldNotes or None),
+            reference_id=format_id("WR", alert.id),
+            exclude_user_id=current_user.id,
+            created_by=current_user.id,
         )
     await log_activity(
         db, actor_id=current_user.id, action_type="voter_survey_added", module="Surveys", reference_id=survey.id,
@@ -329,8 +341,14 @@ def _closes_label(closes_at: datetime | None) -> str | None:
     return f"closes {local.strftime('%d %b')}, {hour}:{local.strftime('%M')} {local.strftime('%p').lower()}"
 
 
+def pct(part: int | None, whole: int | None) -> float:
+    """part as a % of whole, 1 decimal; 0 when whole is 0 (no divide-by-zero in the UI)."""
+    return round((part or 0) * 100 / whole, 1) if whole else 0.0
+
+
 def campaign_row(c: SurveyCampaign) -> dict[str, Any]:
     base = settings.public_site_url.rstrip("/")
+    answered = (c.positive or 0) + (c.negative or 0)
     return {
         "id": format_id("CAMP", c.id),
         "name": c.name,
@@ -339,6 +357,10 @@ def campaign_row(c: SurveyCampaign) -> dict[str, Any]:
         "target": c.target,
         "positive": c.positive,
         "negative": c.negative,
+        # Same formulas as Surveys.jsx / SurveyModals.jsx: share of positive+negative answers.
+        "positive_pct": pct(c.positive, answered),
+        "negative_pct": pct(c.negative, answered),
+        "completion_pct": min(pct(c.responses, c.target), 100.0),
         "status": c.status,
         "feedback": c.feedback_filter,
         "closes_on": _closes_label(c.closes_at),

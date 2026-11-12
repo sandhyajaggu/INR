@@ -1,3 +1,4 @@
+import re
 import secrets
 from datetime import datetime, timezone
 
@@ -14,9 +15,32 @@ from app.core.security import (
     verify_password,
 )
 from app.models.staff import StaffUser
+from app.schemas.common import MOBILE_PATTERN
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.services.activity_service import log_activity
 from app.services.user_service import serialize_session_user
+
+
+def normalize_mobile(value: str) -> str | None:
+    """'+91 98493 55955', '098493-55955', '9849355955' -> '9849355955'; None if not a mobile number."""
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits if MOBILE_PATTERN.match(digits) else None
+
+
+def users_by_identifier_stmt(identifier: str):
+    """SELECT staff users whose email (if it has '@') or mobile number matches `identifier`."""
+    identifier = identifier.strip()
+    if "@" in identifier:
+        return select(StaffUser).where(func.lower(StaffUser.email) == identifier.lower())
+    mobile = normalize_mobile(identifier)
+    if mobile is None:
+        return None
+    stored = func.right(func.regexp_replace(func.coalesce(StaffUser.mobile, ""), r"\D", "", "g"), 10)
+    return select(StaffUser).where(stored == mobile).order_by(StaffUser.id)
 
 
 def _token_response(user: StaffUser, message: str) -> TokenResponse:
@@ -34,12 +58,14 @@ async def authenticate(db: AsyncSession, payload: LoginRequest, ip_address: str 
     if not verify_captcha(payload.captcha_token, payload.captcha_answer):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Incorrect or expired CAPTCHA answer")
 
-    stmt = select(StaffUser).where(
-        func.lower(StaffUser.email) == payload.email.lower(), StaffUser.role == payload.role
+    stmt = users_by_identifier_stmt(payload.identifier)
+    candidates = (await db.execute(stmt.where(StaffUser.role == payload.role))).scalars().all() if stmt is not None else []
+    # A mobile number isn't unique across accounts: sign in to the one whose password matches.
+    user = next(
+        (u for u in candidates if u.status == "active" and verify_password(payload.password, u.password_hash)),
+        None,
     )
-    user = (await db.execute(stmt)).scalar_one_or_none()
-
-    if user is None or user.status != "active" or not verify_password(payload.password, user.password_hash):
+    if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
 
     user.last_login_at = datetime.now(timezone.utc)
@@ -70,11 +96,15 @@ async def refresh_access_token(db: AsyncSession, refresh_token: str) -> TokenRes
     return _token_response(user, "Token refreshed")
 
 
-async def issue_password_reset_token(db: AsyncSession, email: str) -> str:
-    """Stub: returns a one-time reset token. Email delivery is wired up later."""
-    stmt = select(StaffUser).where(func.lower(StaffUser.email) == email.lower())
-    (await db.execute(stmt)).scalar_one_or_none()
-    # Same response whether or not the email exists, so it can't be probed.
+async def issue_password_reset_token(db: AsyncSession, identifier: str) -> str:
+    """Stub: returns a one-time reset token. Email/SMS delivery is wired up later.
+
+    `identifier` is an email or mobile number (the login `username`).
+    """
+    stmt = users_by_identifier_stmt(identifier)
+    if stmt is not None:
+        (await db.execute(stmt)).scalars().first()
+    # Same response whether or not the account exists, so it can't be probed.
     return secrets.token_urlsafe(32)
 
 

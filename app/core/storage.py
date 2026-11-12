@@ -23,6 +23,10 @@ class FileStorage(ABC):
     def delete(self, url: str) -> None:
         """Best-effort delete of a previously saved file."""
 
+    @abstractmethod
+    async def replace(self, url: str, file: UploadFile) -> None:
+        """Overwrite the content of a previously saved file, keeping its URL."""
+
 
 class LocalDiskStorage(FileStorage):
     def __init__(self, base_dir: str = settings.upload_dir, base_url: str = settings.upload_base_url):
@@ -43,11 +47,23 @@ class LocalDiskStorage(FileStorage):
 
         return f"{self.base_url}/{subfolder}/{filename}"
 
-    def delete(self, url: str) -> None:
+    def _path_for(self, url: str) -> Path:
         relative = url.removeprefix(self.base_url).lstrip("/")
-        path = self.base_dir / relative
+        path = (self.base_dir / relative).resolve()
+        if not path.is_relative_to(self.base_dir.resolve()):
+            raise ValueError("File URL is outside the upload directory")
+        return path
+
+    def delete(self, url: str) -> None:
+        path = self._path_for(url)
         if path.exists():
             path.unlink(missing_ok=True)
+
+    async def replace(self, url: str, file: UploadFile) -> None:
+        path = self._path_for(url)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(await file.read())
+        await file.seek(0)
 
 
 def get_file_storage() -> FileStorage:

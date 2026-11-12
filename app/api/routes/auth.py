@@ -34,7 +34,7 @@ async def get_captcha() -> CaptchaResponse:
 @router.post(
     "/login",
     response_model=TokenResponse,
-    summary="Log in as super_admin, admin or staff",
+    summary="Log in as super_admin, admin or staff (username = email or mobile)",
     description="Returns access/refresh tokens plus the `user` object (with its page `access` map).",
 )
 async def login(payload: LoginRequest, request: Request, db: DbSession) -> TokenResponse:
@@ -53,8 +53,8 @@ async def refresh(payload: RefreshRequest, db: DbSession) -> TokenResponse:
     description="Stub for now: returns a reset token directly. Email delivery is wired up later.",
 )
 async def forgot_password(payload: ForgotPasswordRequest, db: DbSession) -> ForgotPasswordResponse:
-    reset_token = await issue_password_reset_token(db, payload.email)
-    message = f"Password reset instructions sent to {payload.email}"
+    reset_token = await issue_password_reset_token(db, payload.identifier)
+    message = f"Password reset instructions sent to {payload.identifier}"
     return ForgotPasswordResponse(message=message, detail=message, reset_token=reset_token)
 
 

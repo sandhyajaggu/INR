@@ -40,6 +40,7 @@ from app.api.routes import (
     local_leaders,
     media,
     mp3,
+    notifications,
     notes_followups,
     polling_day,
     press,
@@ -77,6 +78,7 @@ app.mount(settings.upload_base_url, StaticFiles(directory=settings.upload_dir), 
 app.include_router(auth.router)
 app.include_router(files.router)
 app.include_router(geography.router)
+app.include_router(geography.public_router)
 
 # --- Core modules -----------------------------------------------------------
 # NOTE: each *.extra_router (static sub-paths like /status-summary, /upcoming)
@@ -143,6 +145,8 @@ app.include_router(insights.reports_router)
 app.include_router(staff.router)
 app.include_router(audit_logs.router)
 app.include_router(settings_routes.router)
+app.include_router(settings_routes.public_router)
+app.include_router(notifications.router)
 
 
 @app.get("/health", tags=["Health"], summary="Health check")

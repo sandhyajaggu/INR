@@ -33,6 +33,7 @@ from app.models.janata_darbar import JanataDarbarVisit
 from app.models.local_leaders import LocalLeader
 from app.models.multimedia import GalleryPhoto, Mp3Song, PressGalleryItem, Video
 from app.models.notes_followups import NoteFollowup
+from app.models.notifications import Notification, UploadedFile
 from app.models.schemes import Beneficiary, Scheme
 from app.models.settings import AppSettings
 from app.models.staff import StaffUser
@@ -82,4 +83,6 @@ __all__ = [
     "Village",
     "VillageAlias",
     "Voter",
+    "Notification",
+    "UploadedFile",
 ]

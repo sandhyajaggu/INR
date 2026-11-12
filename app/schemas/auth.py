@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class CaptchaResponse(BaseModel):
@@ -8,11 +8,30 @@ class CaptchaResponse(BaseModel):
     captcha_token: str
 
 
-class LoginRequest(BaseModel):
+class _UsernameOrEmail(BaseModel):
+    """`username` takes an email or a 10-digit mobile number (like the YSR site).
+
+    `email` is still accepted so the current Login.js keeps working; send one of the two.
+    """
+
+    username: str | None = Field(default=None, max_length=150, description="Email or mobile number")
+    email: EmailStr | None = None
+
+    @model_validator(mode="after")
+    def _need_one(self):
+        if not (self.username and self.username.strip()) and not self.email:
+            raise ValueError("Enter your email or mobile number")
+        return self
+
+    @property
+    def identifier(self) -> str:
+        return (self.username or "").strip() or str(self.email)
+
+
+class LoginRequest(_UsernameOrEmail):
     # Login.js offers super_admin / admin / staff. "staff" covers every other
     # User Management role (Booth Agent, Mandal In-Charge, Custom, ...).
     role: str = Field(..., pattern="^(super_admin|admin|staff)$")
-    email: EmailStr
     password: str
     captcha_token: str
     captcha_answer: str
@@ -34,8 +53,8 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+class ForgotPasswordRequest(_UsernameOrEmail):
+    pass
 
 
 class ForgotPasswordResponse(BaseModel):

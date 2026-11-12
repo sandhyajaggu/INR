@@ -1,6 +1,7 @@
 """Settings page (frontend: SettingsPage.jsx, mockSettingsApi).
 
     GET /settings          getSettings()   -> {profile, profile_te, preferences, dropdowns}
+    GET /public/settings   no login        -> {default_language: "en"|"te", telugu_default_website, profile, profile_te}
     PUT /settings          updateSettings({profile, profile_te, preferences, dropdowns}) -> {success, data}
 
 profile:      constituency ("Kandukur (229)"), district, mla, office_phone, office_email, office_address
@@ -26,6 +27,7 @@ from app.models.settings import AppSettings
 from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+public_router = APIRouter(prefix="/public", tags=["Public"])
 
 CanView = page_access("settings", "view")
 CanEdit = page_access("settings", "edit")
@@ -193,6 +195,25 @@ async def settings_payload(db) -> dict[str, Any]:
         "profile_te": {k: (row.profile_te or {}).get(k) for k in PROFILE_KEYS},
         "preferences": {**DEFAULT_PREFERENCES, **(row.preferences or {})},
         "dropdowns": await _dropdowns(db),
+    }
+
+
+@public_router.get("/settings", summary="Public website settings: default UI language + office profile (unauthenticated)")
+async def get_public_settings(db: DbSession) -> dict[str, Any]:
+    """What the public site needs before anyone logs in.
+
+    default_language is "te" when Settings > "Telugu default website" is on, else "en"
+    (i18next language codes, ready for i18n.changeLanguage()). Only public office
+    details are returned; dropdowns and staff preferences stay behind /settings.
+    """
+    row = (await db.execute(select(AppSettings).order_by(AppSettings.id).limit(1))).scalar_one_or_none()
+    prefs = {**DEFAULT_PREFERENCES, **((row.preferences if row else None) or {})}
+    telugu = bool(prefs.get("telugu_default_website"))
+    return {
+        "default_language": "te" if telugu else "en",
+        "telugu_default_website": telugu,
+        "profile": _profile(row) if row else {k: None for k in PROFILE_KEYS},
+        "profile_te": {k: ((row.profile_te if row else None) or {}).get(k) for k in PROFILE_KEYS},
     }
 
 
